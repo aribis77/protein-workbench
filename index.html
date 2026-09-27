@@ -3234,8 +3234,9 @@ function mcRun(S, residues, cfg){
   const extra=cfg.extraEnergy||(()=>0);
   const total=()=>{ let e=0; for(const r of movable) e+=localE(r); return e/1+extra(); };
   const sweeps=cfg.sweeps||300, burn=cfg.burn===undefined?Math.floor(sweeps*0.3):cfg.burn;
+  /* the same guard: with nothing rotatable there is no move to attempt */
   for(let sw=0; sw<sweeps; sw++){
-    for(let k=0;k<Math.max(1,movable.length);k++){
+    for(let k=0;k<movable.length;k++){
       const r=movable[Math.floor(rand()*movable.length)];
       const cur=chis.get(r.ridx); if(!cur.length) continue;
       const ci=Math.floor(rand()*cur.length);
@@ -3346,8 +3347,12 @@ function mcRunAtLambda(S, shell, gA, gB, grid, lam, alpha, cfg, skip){
     return groupEnergy(S,g,grid,{lambda:1,skip});
   };
   const sweeps=cfg.sweeps||200, burn=cfg.burn===undefined?Math.floor(sweeps*0.3):cfg.burn;
+  /* With nothing rotatable in the shell there is no move to attempt. Forcing a
+     single pass anyway indexes an empty list, which is how mutating to glycine
+     among rigid neighbours used to fail. The sweeps still run so that frames are
+     collected and the two coupled groups are scored at each window. */
   for(let sw=0; sw<sweeps; sw++){
-    for(let k=0;k<Math.max(1,movable.length);k++){
+    for(let k=0;k<movable.length;k++){
       const r=movable[Math.floor(rand()*movable.length)];
       const cur=chis.get(r.ridx); if(!cur.length) continue;
       const ci=Math.floor(rand()*cur.length);
@@ -5315,31 +5320,64 @@ $("#btnaf").onclick=()=>fetchAF().catch(e=>log("AlphaFold DB: "+e.message,"err")
 async function fetchAF(){
   const id=$("#afid").value.trim().toUpperCase();
   if(!/^[A-Z0-9]{6,10}$/.test(id)){ log("Give a UniProt accession, for example P00734.","warn"); return; }
-  for(const v of ["v4","v3"]){
-    busy(`Fetching AF-${id}-F1 (${v})…`); await nextFrame();
-    try{
-      const m=await fetch(`https://alphafold.ebi.ac.uk/files/AF-${id}-F1-model_${v}.pdb`);
-      if(!m.ok) continue;
-      loadStructure(await m.text(), `AF-${id}-F1.pdb`);
-      try{
-        const p=await fetch(`https://alphafold.ebi.ac.uk/files/AF-${id}-F1-predicted_aligned_error_${v}.json`);
-        if(p.ok){ ST.pae=parsePAE(await p.text());
-          $("#paeinfo").textContent=`AF-${id}-F1 PAE · ${ST.pae.n}×${ST.pae.n} residues`;
-          $("#btnconf").disabled=false;
-          log("Model and PAE both fetched.","ok"); }
-      }catch(e){ log("The model loaded but its PAE did not; load the JSON separately.","warn"); }
-      return;
-    }catch(err){
-      log("The request was blocked before it reached the server, which is this page's network "+
-          "policy rather than the database. Open these two, then load them here \u2014 the model "+
-          "with \u201COpen PDB/mmCIF file\u201D and the JSON with \u201CLoad PAE\u201D:\n  "+
-          linkTo(`https://alphafold.ebi.ac.uk/files/AF-${id}-F1-model_v4.pdb`)+"\n  "+
-          linkTo(`https://alphafold.ebi.ac.uk/files/AF-${id}-F1-predicted_aligned_error_v4.json`)+
-          "\nOpening this page from a local file, or hosting it yourself, removes the restriction.","err");
-      return;
+  /* The database re-versions its files, so a filename assembled here goes stale:
+     v4 became v6 and the old files moved to the archive. The metadata endpoint
+     reports the current download URLs, so they are asked for rather than guessed. */
+  busy(`Looking up AF-${id}-F1\u2026`); await nextFrame();
+  let entry=null, discovered=true;
+  try{
+    const r=await fetch(`https://alphafold.ebi.ac.uk/api/prediction/${id}`);
+    if(r.ok){
+      const list=await r.json();
+      if(Array.isArray(list)&&list.length) entry=list[0];
     }
+  }catch(err){
+    log("The request was blocked before it reached the server, which is this page's network "+
+        "policy rather than the database. Open the entry page, download the model and its "+
+        "predicted aligned error, then load them here with \u201COpen PDB/mmCIF file\u201D and "+
+        "\u201CLoad PAE\u201D:\n  "+
+        linkTo(`https://alphafold.ebi.ac.uk/entry/AF-${id}-F1`)+
+        "\nOpening this page from a local file, or hosting it yourself, removes the restriction.","err");
+    return;
   }
-  log(`No AlphaFold model found for ${id}.`,"warn");
+  let modelUrl=entry&&entry.pdbUrl, paeUrl=entry&&entry.paeDocUrl;
+  if(!modelUrl){
+    /* the endpoint gave nothing: fall back to the historical file names, which
+       still resolve for entries that have not been re-issued */
+    discovered=false;
+    modelUrl=`https://alphafold.ebi.ac.uk/files/AF-${id}-F1-model_v4.pdb`;
+    paeUrl=`https://alphafold.ebi.ac.uk/files/AF-${id}-F1-predicted_aligned_error_v4.json`;
+  }
+  busy(`Fetching AF-${id}-F1\u2026`); await nextFrame();
+  let m;
+  try{ m=await fetch(modelUrl); }
+  catch(err){
+    log("The model could not be downloaded from "+linkTo(modelUrl)+
+        ", which is this page's network policy rather than the database.","err");
+    return;
+  }
+  if(!m||!m.ok){
+    log(`No AlphaFold model is available for ${id}. Check the accession, and note that the `+
+        `database holds one prediction per UniProt entry: a complex or an isoform will not be `+
+        `there under its own name. The entry page is `+
+        linkTo(`https://alphafold.ebi.ac.uk/entry/AF-${id}-F1`)+".","warn");
+    return;
+  }
+  loadStructure(await m.text(), `AF-${id}-F1.pdb`);
+  if(entry&&entry.uniprotDescription)
+    log(`${entry.uniprotDescription}${entry.organismScientificName?
+      " ("+entry.organismScientificName+")":""}${entry.latestVersion?
+      ", version "+entry.latestVersion:""}.`,"ok");
+  if(!paeUrl){ log("No predicted aligned error is listed for this entry.","warn"); return; }
+  try{
+    const p=await fetch(paeUrl);
+    if(p.ok){
+      ST.pae=parsePAE(await p.text());
+      $("#paeinfo").textContent=`AF-${id}-F1 PAE \u00B7 ${ST.pae.n}\u00D7${ST.pae.n} residues`;
+      $("#btnconf").disabled=false;
+      log(`Model and PAE both fetched${discovered?"":" using the older file names"}.`,"ok");
+    } else log("The model loaded but its PAE did not; load the JSON separately.","warn");
+  }catch(e){ log("The model loaded but its PAE did not; load the JSON separately.","warn"); }
 }
 $("#btnconf").onclick=()=>confidenceRun().catch(e=>log("Confidence: "+e.message,"err"))
   .finally(()=>busy(null));
