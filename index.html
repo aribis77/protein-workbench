@@ -8413,6 +8413,104 @@ function PDFDoc(opts){
       rows.forEach(r=>row(r,"F1",8.5));
       y-=4;
     },
+    /* ---- drawing primitives ----
+       PDF space has its origin at the bottom left and y increasing upwards,
+       which is the opposite of the cursor used for text above, so every chart
+       reserves a block of height h and draws inside it. */
+    at(x,y,str,{size=8.5,font="F1",color="0 0 0",align="left"}={}){
+      const wdt=textWidth(str,font,size);
+      const px=align==="right"?x-wdt:align==="center"?x-wdt/2:x;
+      out(`BT ${color} rg /${font} ${size} Tf ${px.toFixed(1)} ${y.toFixed(1)} Td `+
+          `(${pdfEscape(str)}) Tj ET`);
+    },
+    box(x,y,wid,hei,{fill=null,stroke=null,width=0.6}={}){
+      if(fill) out(`${fill} rg ${x.toFixed(1)} ${y.toFixed(1)} ${wid.toFixed(1)} ${hei.toFixed(1)} re f`);
+      if(stroke) out(`${width} w ${stroke} RG ${x.toFixed(1)} ${y.toFixed(1)} `+
+        `${wid.toFixed(1)} ${hei.toFixed(1)} re S`);
+    },
+    path(points,{stroke="0 0 0",width=1}={}){
+      if(points.length<2) return;
+      const p0=points[0];
+      out(`${width} w ${stroke} RG ${p0[0].toFixed(1)} ${p0[1].toFixed(1)} m `+
+        points.slice(1).map(q=>`${q[0].toFixed(1)} ${q[1].toFixed(1)} l`).join(" ")+" S");
+    },
+    disc(x,y,r,fill="0 0 0"){
+      const k=0.5523*r;
+      out(`${fill} rg ${(x+r).toFixed(2)} ${y.toFixed(2)} m `+
+        `${(x+r).toFixed(2)} ${(y+k).toFixed(2)} ${(x+k).toFixed(2)} ${(y+r).toFixed(2)} ${x.toFixed(2)} ${(y+r).toFixed(2)} c `+
+        `${(x-k).toFixed(2)} ${(y+r).toFixed(2)} ${(x-r).toFixed(2)} ${(y+k).toFixed(2)} ${(x-r).toFixed(2)} ${y.toFixed(2)} c `+
+        `${(x-r).toFixed(2)} ${(y-k).toFixed(2)} ${(x-k).toFixed(2)} ${(y-r).toFixed(2)} ${x.toFixed(2)} ${(y-r).toFixed(2)} c `+
+        `${(x+k).toFixed(2)} ${(y-r).toFixed(2)} ${(x+r).toFixed(2)} ${(y-k).toFixed(2)} ${(x+r).toFixed(2)} ${y.toFixed(2)} c f`);
+    },
+    /* ---- charts, drawn as vectors so they stay sharp and selectable ---- */
+    bars(spec){
+      const rows=(spec.rows||[]).slice(0, spec.max||14);
+      if(!rows.length) return;
+      const rowH=13, gutter=Math.min(150, 12+Math.max(...rows.map(r=>
+        textWidth(r.label,"F1",8)))), hei=rows.length*rowH+34;
+      api.space(10); ensure(hei); y-=hei;
+      const top=y+hei, left=M+gutter, plotW=right-left-34;
+      if(spec.title) api.at(M, top-9, spec.title, {size:9.5, font:"F2"});
+      const vals=rows.map(r=>r.value);
+      const lo=Math.min(0,...vals), hi=Math.max(0,...vals), span=(hi-lo)||1;
+      const X=v=>left+((v-lo)/span)*plotW;
+      const zero=X(0);
+      rows.forEach((r,i)=>{
+        const by=top-22-i*rowH, xa=X(Math.min(0,r.value)), xb=X(Math.max(0,r.value));
+        api.box(xa, by, Math.max(0.6,xb-xa), rowH-4, {fill:r.color||"0.18 0.50 0.66"});
+        api.at(left-4, by+3, fitLabel(r.label, gutter-10, 8), {size:8, align:"right"});
+        api.at(xb+3, by+3, r.display!==undefined?String(r.display):String(+r.value.toFixed(2)),
+          {size:7.5, color:"0.35 0.35 0.35"});
+      });
+      /* the baseline spans the bars, which run downwards from the title */
+      api.path([[zero, top-22+rowH-4],[zero, top-22-(rows.length-1)*rowH]],
+        {stroke:"0.15 0.2 0.22", width:0.8});
+      if(spec.xLabel) api.at((left+right)/2, y+6, spec.xLabel,
+        {size:8, align:"center", color:"0.35 0.35 0.35"});
+    },
+    plot(spec){
+      const hei=spec.height||150;
+      api.space(10); ensure(hei); y-=hei;
+      const top=y+hei, base=y+22, left=M+34;
+      if(spec.title) api.at(M, top-9, spec.title, {size:9.5, font:"F2"});
+      const axTop=top-18;
+      const pts=spec.points||[], series=spec.series||[];
+      const xs=pts.map(p=>p.x).concat(series.flatMap(s2=>s2.x));
+      const ys=pts.map(p=>p.y).concat(series.flatMap(s2=>s2.y)).filter(isFinite);
+      if(!xs.length||!ys.length) return;
+      let xlo=Math.min(...xs), xhi=Math.max(...xs);
+      let ylo=spec.yMin!==undefined?spec.yMin:Math.min(...ys);
+      let yhi=spec.yMax!==undefined?spec.yMax:Math.max(...ys);
+      if(xlo===xhi){xlo-=1;xhi+=1;} if(ylo===yhi){ylo-=1;yhi+=1;}
+      const X=v=>left+((v-xlo)/(xhi-xlo))*(right-left-6);
+      const Y=v=>base+((v-ylo)/(yhi-ylo))*(axTop-base);
+      niceTicks(ylo,yhi,4).forEach(t=>{
+        if(t<ylo||t>yhi) return;
+        api.path([[left,Y(t)],[right-6,Y(t)]], {stroke:"0.80 0.83 0.85", width:0.4});
+        api.at(left-3, Y(t)-2.5, String(+t.toFixed(2)), {size:7, align:"right", color:"0.35 0.35 0.35"});
+      });
+      niceTicks(xlo,xhi,5).forEach(t=>{
+        if(t<xlo||t>xhi) return;
+        api.at(X(t), base-9, String(+t.toFixed(2)), {size:7, align:"center", color:"0.35 0.35 0.35"});
+      });
+      api.path([[left,base],[right-6,base]], {stroke:"0.15 0.2 0.22", width:0.7});
+      api.path([[left,base],[left,axTop]], {stroke:"0.15 0.2 0.22", width:0.7});
+      if(spec.identity){
+        const a=Math.max(xlo,ylo), b=Math.min(xhi,yhi);
+        if(b>a) api.path([[X(a),Y(a)],[X(b),Y(b)]], {stroke:"0.45 0.45 0.45", width:0.5});
+      }
+      const palette=["0.18 0.50 0.66","0.88 0.54 0.18","0.42 0.66 0.31","0.61 0.35 0.71"];
+      series.forEach((s2,i)=>{
+        const line=s2.x.map((xv,k)=>isFinite(s2.y[k])?[X(xv),Y(s2.y[k])]:null).filter(Boolean);
+        api.path(line, {stroke:s2.color||palette[i%palette.length], width:1.1});
+        if(s2.name) api.at(right-6-i*0, axTop-2-i*9, s2.name,
+          {size:7.5, align:"right", color:s2.color||palette[i%palette.length]});
+      });
+      pts.forEach(p=>api.disc(X(p.x), Y(p.y), p.r||1.6, p.color||"0.18 0.50 0.66"));
+      if(spec.xLabel) api.at((left+right)/2, y+4, spec.xLabel,
+        {size:8, align:"center", color:"0.35 0.35 0.35"});
+      if(spec.yLabel) api.at(M, axTop-4, spec.yLabel, {size:7.5, color:"0.35 0.35 0.35"});
+    },
     build(title){
       const objs=[]; const push=o=>{objs.push(o); return objs.length;};
       const fontIds={};
@@ -10048,6 +10146,9 @@ function buildReportPDF(){
     const inter=ST.contactsWT.filter(x=>x.inter).length;
     d.text(`${ST.contactsWT.length} contacts were detected under the criteria in force, of which `+
       `${inter} lie between different chains. Scope: ${$("#scope").value}.`,{});
+    d.bars({title:"Contacts by interaction type", xLabel:"number of contacts",
+      rows:Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,10)
+        .map(([t,v])=>({label:TYPES[t]?TYPES[t].label:t, value:v}))});
     d.table(["Interaction type","Total","Between chains","Within a chain"],
       Object.entries(c).sort((a,b)=>b[1]-a[1]).map(([t,v])=>{
         const i=ST.contactsWT.filter(x=>x.type===t&&x.inter).length;
@@ -10087,6 +10188,10 @@ function buildReportPDF(){
       `This is a difference between two minimised structures with no conformational sampling behind `+
       `it and therefore no uncertainty; it is intended for triage, and the sign and the ranking `+
       `within a series are the defensible outputs rather than the absolute value.`,{});
+    d.bars({title:"Change by energy term", xLabel:"kcal/mol",
+      rows:Object.keys(TERMLABEL).filter(k=>k!=="total").map(k=>({label:TERMLABEL[k],
+        value:+(E.mut[k]-E.wt[k]).toFixed(2),
+        color:(E.mut[k]-E.wt[k])>0?"0.75 0.31 0.30":"0.42 0.66 0.31"}))});
     d.table(["Term","Wild type","Mutant","Difference"],
       Object.keys(TERMLABEL).map(k=>[TERMLABEL[k],E.wt[k].toFixed(2),E.mut[k].toFixed(2),
         ((E.mut[k]-E.wt[k])>0?"+":"")+(E.mut[k]-E.wt[k]).toFixed(2)]),[3,1.2,1.2,1.2]);
@@ -10109,6 +10214,13 @@ function buildReportPDF(){
         `${(isFinite(a.sd)?a.sem:a.within).toFixed(2)} kcal/mol by thermodynamic integration`+
         (isFinite(a.bar)?`, and ${a.bar.toFixed(2)} kcal/mol by the Bennett acceptance ratio on the `+
         `same samples.`:"."),{font:"F2",size:10});
+      d.plot({title:"dU/dlambda along the alchemical path", xLabel:"lambda",
+        yLabel:"kcal/mol", series:[
+          {name:bind?"in the complex":"in the structure",
+           x:a.runs[0].folded.lambdas, y:a.runs[0].folded.dudl.map(z=>z.mean)},
+          {name:bind?"in the free chain":"reference state",
+           x:a.runs[0].unfolded.lambdas, y:a.runs[0].unfolded.dudl.map(z=>z.mean),
+           color:"0.88 0.54 0.18"}]});
       if(isFinite(a.sd))
         d.text(`Individual repeats: ${a.runs.map(r=>r.ddG.toFixed(2)).join(", ")} kcal/mol. The `+
           `scatter between repeats, ${a.sd.toFixed(2)}, is the honest uncertainty; the within-run `+
@@ -10136,6 +10248,10 @@ function buildReportPDF(){
       `${rows.filter(x=>x.rscc<0.6).length} residues fall below 0.6. `+
       `${weak.length} contacts rest on weak density and are listed below; a structural claim `+
       `depending on them should carry that caveat.`,{});
+    d.plot({title:"Real-space correlation by residue", xLabel:"residue number",
+      yLabel:"correlation", yMin:0, yMax:1, series:[{name:"correlation",
+        x:rows.slice().sort((a,b)=>a.r.resi-b.r.resi).map(x=>x.r.resi),
+        y:rows.slice().sort((a,b)=>a.r.resi-b.r.resi).map(x=>x.rscc)}]});
     if(weak.length) d.table(["Type","Partner 1","Partner 2","d (A)","Correlation"],
       cap(weak,15).map(c=>[TYPES[c.type].label,rl(ST.wt.residues[c.ri]),rl(ST.wt.residues[c.rj]),
         c.d.toFixed(2),c.rscc.toFixed(3)]),[2,2,2,1,1.2]);
@@ -10160,6 +10276,10 @@ function buildReportPDF(){
         `the support of its contacts. ${moved.length} residues fall materially under that weighting, `+
         `and ${lost.length} residues are cut points only in the unweighted network, meaning the claim `+
         `that the structure would fragment at those points is itself unsupported.`,{});
+      if(cen.rows.length) d.plot({title:"Betweenness before and after weighting by support",
+        xLabel:"as detected", yLabel:"under evidence", identity:true,
+        points:cen.rows.filter(x=>x.plain>0).map(x=>({x:x.plain, y:x.supported, r:1.5,
+          color:x.drop>0.005?"0.75 0.31 0.30":"0.18 0.50 0.66"}))});
       if(moved.length) d.table(["Residue","As detected","Under evidence","Fall"],
         moved.slice(0,12).map(x=>[`${x.r.resn}${x.r.resi}${x.r.chain}`,x.plain.toFixed(4),
           x.supported.toFixed(4),"-"+x.drop.toFixed(4)]),[2,1.4,1.4,1.2]);
@@ -10182,6 +10302,11 @@ function buildReportPDF(){
       `most likely to be wrong and the least likely to look wrong, since every residue involved `+
       `appears well modelled.`:`No predicted aligned error was supplied, so only the residue-level `+
       `confidence is available and nothing can be said about relative placement.`),{});
+    const confPts=ST.contactsWT.filter(c=>isFinite(c.plddt)&&isFinite(c.pae));
+    if(confPts.length) d.plot({title:"Contact confidence", xLabel:"lower pLDDT of the pair",
+      yLabel:"pairwise PAE (A)", points:confPts.map(c=>({x:c.plddt, y:c.pae, r:1.4,
+        color:c.verdict==="confident residues, uncertain relative position"?"0.75 0.31 0.30"
+          :c.verdict==="confident"?"0.42 0.66 0.31":"0.45 0.45 0.45"}))});
     if(hidden.length) d.table(["Type","Partner 1","Partner 2","pLDDT","PAE (A)"],
       cap(hidden,15).map(c=>[TYPES[c.type].label,rl(ST.wt.residues[c.ri]),rl(ST.wt.residues[c.rj]),
         c.plddt.toFixed(0),c.pae.toFixed(1)]),[2,2,2,1,1]);
@@ -10195,6 +10320,11 @@ function buildReportPDF(){
       `reactive tips lie within ${ST.xlink.cfg.reach.toFixed(1)} A of one another measured as a path `+
       `through solvent around the protein, and both side chains are solvent exposed. This is a `+
       `geometric screen and establishes only that a pair is not excluded by distance and burial.`,{});
+    const xl=ST.xlink.pairs.filter(p=>isFinite(p.tipSASD));
+    if(xl.length) d.plot({title:"Straight line against path through solvent",
+      xLabel:"straight-line distance between tips (A)", yLabel:"path through solvent (A)",
+      identity:true, points:xl.map(p=>({x:p.tipEuclid, y:p.tipSASD, r:1.6,
+        color:p.competent?"0.42 0.66 0.31":"0.75 0.31 0.30"}))});
     if(comp.length) d.table(["Gln","Lys","Tip, straight (A)","Tip, surface (A)","Scope"],
       cap(comp,15).map(p=>[rl(p.gln),rl(p.lys),String(p.tipEuclid),n(p.tipSASD),
         p.inter?"between chains":"within a chain"]),[1.4,1.4,1.4,1.4,1.4]);
@@ -10239,6 +10369,10 @@ function buildReportPDF(){
       (g.fl.cc<0.35?`That is low, and the modes below should be read as a hypothesis rather than a `+
       `description of this structure.`:`Values near 0.6 are what this method achieves on well-ordered `+
       `proteins.`)+` ${g.hinges.length} hinge points were identified from the slowest mode.`,{});
+    d.plot({title:"Fluctuation by residue", xLabel:"residue index", yLabel:"B-factor (A^2)",
+      series:[{name:"predicted", x:g.K.beads.map((_,i)=>i), y:[...g.fl.scaled]},
+              {name:"deposited", x:g.K.beads.map((_,i)=>i), y:g.fl.obs,
+               color:"0.88 0.54 0.18"}]});
     if(g.hinges.length) d.table(["Hinge residue","Amplitude","Also a network cut point"],
       cap(g.hinges,10).map(h=>[rl(h.residue),h.amplitude.toFixed(3),
         (ST.aps&&ST.aps.has(h.residue.ridx))?"yes":"no"]),[2,1.2,2]);
@@ -10269,6 +10403,10 @@ function buildReportPDF(){
       `${(C2.M.identity*100).toFixed(0)} per cent identity, mapping ${C2.M.matched} residues. `+
       `Conservation is crossed with contact strength and network centrality below; residues scoring `+
       `highly on all three are a much narrower set than any one criterion alone.`,{});
+    d.plot({title:"Conservation against contact strength", xLabel:"conservation",
+      yLabel:"summed contact strength (kcal/mol)",
+      points:C2.ranked.map((r,i)=>({x:r.conservation, y:r.strength, r:i<8?2.4:1.4,
+        color:i<8?"0.88 0.54 0.18":"0.18 0.50 0.66"}))});
     d.table(["Residue","Conservation","Contact strength","Betweenness","Combined"],
       cap(C2.ranked,12).map(r=>[rl(r.r),r.conservation.toFixed(3),r.strength.toFixed(1),
         isFinite(r.betweenness)?r.betweenness.toFixed(4):"\u2014",r.combined.toFixed(3)]),[2,1.4,1.5,1.4,1.2]);
@@ -10293,6 +10431,207 @@ function buildReportPDF(){
       `frames and ${ST.dyn.contacts.filter(c=>c.episodes>2).length} break and reform more than twice. `+
       `Occupancy and episode count together distinguish a persistent interaction from one that merely `+
       `appears in the frame that was deposited.`,{});
+  }
+
+  if(ST.crystal){
+    d.heading("Crystal environment",2);
+    const X=ST.crystal;
+    const asmX=X.asmCheck.filter(a=>a.match);
+    d.text(`Space group ${X.cryst.spaceGroup}, cell ${X.cryst.cell.a.toFixed(1)} by `+
+      `${X.cryst.cell.b.toFixed(1)} by ${X.cryst.cell.c.toFixed(1)} A. The lattice was expanded and `+
+      `${X.xc.perMate.length} neighbouring copies come close enough to touch, making `+
+      `${X.xc.contacts.length} contacts that involve `+
+      `${new Set(X.xc.perMate.flatMap(p=>p.residues)).size} residues. A residue at a lattice contact `+
+      `is not free in solution, which is worth knowing before reading anything into its exposure, its `+
+      `B-factor or its apparent flexibility.`,{});
+    if(asmX.length) d.text(`The operator generating biological assembly ${asmX[0].assembly} `+
+      `coincides with crystallographic operator ${asmX[0].match.op}, so the interface it creates is `+
+      `also a lattice contact. Many genuine dimers sit on a crystallographic axis, so this does not `+
+      `make the assembly spurious, but the symmetry alone cannot distinguish the two.`,{font:"F2",size:9.5});
+    if(X.origin.length) d.table(["Chain pair","Related by symmetry","Operator","In an assembly"],
+      X.origin.slice(0,10).map(o=>[`${o.a} - ${o.b}`,
+        o.crystallographic?"yes, this is crystal packing":(o.reason||"no"),
+        o.operator?String(o.operator):"\u2014", o.inAssembly?"yes":"no"]),[2,3,1.2,1.4]);
+  }
+
+  if(ST.glycan){
+    d.heading("Glycans",2);
+    const G=ST.glycan;
+    const unocc=G.sequons.filter(q=>!G.occupied.has(q.asn.ridx));
+    d.text(`${G.glycans.trees.length} glycans are modelled over ${G.glycans.residues.length} sugar `+
+      `residues, and ${G.sequons.length} sequons were found, of which ${unocc.length} carry nothing. `+
+      `${G.residueShadow.size} residues fall within a glycan or its assumed volume. A sphere standing `+
+      `in for an unmodelled glycan is a crude proxy: real glycans are branched, flexible and `+
+      `anisotropic, and it is there to stop a site being called accessible when a sugar almost `+
+      `certainly covers it.`,{});
+    if(ST.xlinkShadowed){
+      const blocked=ST.xlinkShadowed.filter(x=>x.shadow);
+      d.text(`${blocked.length} of ${ST.xlinkShadowed.length} competent Gln-Lys pairs have a reactive `+
+        `tip inside that volume and should be discounted unless the glycan is known to be absent.`,{});
+    }
+  }
+
+  if(ST.elec){
+    d.heading("Electrostatics and pKa",2);
+    const E2=ST.elec;
+    const contradicted=E2.pKa.rows.filter(x=>{
+      if(["ASP","GLU","CYS","TYR"].includes(x.resn)) return x.predicted>E2.pH+0.5;
+      if(["LYS","ARG"].includes(x.resn)) return x.predicted<E2.pH-0.5;
+      if(x.resn==="HIS") return x.predicted>E2.pH+0.5;
+      return false; });
+    d.text(`The linearised Poisson-Boltzmann equation was solved on a ${E2.solution.h.toFixed(2)} A `+
+      `grid with the solute at a dielectric of ${E2.solution.cfg.epsIn} and the solvent at `+
+      `${E2.solution.cfg.epsOut}, converging in ${E2.solution.iterations} iterations. Net charge `+
+      `${E2.dipole.netCharge}, dipole ${E2.dipole.debye.toFixed(0)} debye. Desolvation is measured `+
+      `against the same group in an isolated model compound, and the background comes from a solution `+
+      `in which that group's own charges are switched off. Interactions between titrating sites are `+
+      `not treated, which is the usual single-site approximation and not a titration calculation.`,{});
+    d.bars({title:"Shift from the free-solution pKa", xLabel:"pKa units", max:14,
+      rows:E2.pKa.rows.slice(0,14).map(x=>({label:`${x.resn}${x.residue.resi}`, value:x.shift,
+        color:Math.abs(x.shift)>2?"0.75 0.31 0.30":"0.18 0.50 0.66"}))});
+    if(contradicted.length){
+      d.text(`${contradicted.length} groups are predicted to be in a different protonation state at `+
+        `pH ${E2.pH} from the one the energy function assumes, so any mutation or free energy `+
+        `involving them carries that as a known error.`,{font:"F2",size:9.5});
+      d.table(["Residue","Estimated pKa","Shift"],
+        contradicted.slice(0,12).map(x=>[x.residue.key, String(x.predicted),
+          (x.shift>0?"+":"")+x.shift]),[2,1.4,1.2]);
+    }
+  }
+
+  if(ST.mech){
+    d.heading("Mechanical loading",2);
+    const Mx=ST.mech;
+    d.text(`Pulling ${Mx.axis.a.key} against ${Mx.axis.b.key}, ${Mx.axis.length.toFixed(0)} A apart. `+
+      `Each contact was given a resistance from its type scaled by how far its direction lies across `+
+      `the pull rather than along it, and every cut perpendicular to the axis is held by whatever `+
+      `crosses it. The weakest such cut carries ${Mx.weakest.nonCovalent.toFixed(1)} units across `+
+      `${Mx.weakest.count} contacts. This is a ranking of exposure to a pull and not a force: there `+
+      `are no piconewtons here, contacts are treated as breaking independently when they fail `+
+      `cooperatively, and the structure is not allowed to relax as it loads.`,{});
+    d.plot({title:"Resistance against position along the pull",
+      xLabel:"distance along the axis (A)", yLabel:"resistance crossing the cut",
+      series:[{name:"non-covalent", x:Mx.profile.map(z=>+z.s.toFixed(1)),
+        y:Mx.profile.map(z=>z.nonCovalent)}]});
+    d.table(["Residue carrying most load","Load"],
+      Mx.clamp.slice(0,8).map(c=>[c.r.key, c.load.toFixed(2)]),[3,1.2]);
+  }
+
+  if(ST.hotspots){
+    d.heading("Binding hotspots",2);
+    const H=ST.hotspots;
+    d.text(`${H.considered} interface residues were scanned on chain ${H.chain}, of which `+
+      `${H.usable} are worth a mutant and ${H.rows.length-H.usable} were disqualified for reasons no `+
+      `energy function sees. The scan is a ranking instrument rather than a measurement: it selects `+
+      `which few to put through the alchemical binding calculation. A candidate with a large `+
+      `interface cost and a small structural cost is a clean experiment; one with both large may `+
+      `simply misfold, and a binding assay would then report a loss that says nothing about the `+
+      `interface.`,{});
+    const pts=H.ranked.filter(x=>isFinite(x.dBind)&&isFinite(x.dFoldRigid));
+    if(pts.length) d.plot({title:"Interface cost against structural cost",
+      xLabel:"change in interface energy (kcal/mol)", yLabel:"change in structure (kcal/mol)",
+      points:pts.map((x,i)=>({x:x.dBind, y:x.dFoldRigid, r:i<6?2.4:1.5,
+        color:i<6?"0.88 0.54 0.18":"0.18 0.50 0.66"}))});
+    d.table(["Residue","Contacts","d interface","d structure","Make","Measured ddG(bind)"],
+      H.ranked.slice(0,12).map(x=>[x.r.key, String(x.contacts),
+        isFinite(x.dBind)?x.dBind.toFixed(2):"\u2014",
+        isFinite(x.dFoldRigid)?x.dFoldRigid.toFixed(2):"\u2014",
+        `${x.r.resn} to ${x.sub.primary.to}`,
+        x.measured?`${x.measured.mean.toFixed(2)} +/- ${(x.measured.sd||0).toFixed(2)}`:""]),
+      [2,1,1.4,1.4,1.6,1.8]);
+    const dq=H.rows.filter(x=>x.disqualified);
+    if(dq.length) d.table(["Not worth a mutant","Why not"],
+      dq.slice(0,10).map(x=>[x.r.key,
+        x.filters.filter(f=>f.level==="disqualify").map(f=>f.text).join("; ")]),[1.6,5]);
+    d.text(`Check the numbering before ordering anything: residue numbers in a deposited structure `+
+      `are frequently not those of an expression construct. Hotspot prediction of this kind finds a `+
+      `useful share of real hotspots and also produces false positives, so this is a prioritisation `+
+      `of experiments rather than a substitute for them.`,{size:9});
+  }
+
+  if(ST.gated){
+    d.heading("Competence across an ensemble",2);
+    const Gt=ST.gated;
+    const spans=Gt.coords.map(c=>c.span);
+    const on=Gt.pairs.filter(x=>x.classification==="conditional"&&x.rho>0.3);
+    d.text(`${Gt.pairs.length} Gln-Lys pairs came within range across ${Gt.frames} conformations, `+
+      `whose longest dimension varies from ${Math.min(...spans).toFixed(1)} to `+
+      `${Math.max(...spans).toFixed(1)} A. ${on.length} are competent only in the more extended `+
+      `conformations, which is what a force-gated reaction would look like. The coefficient measures `+
+      `association with extension across the conformations supplied and nothing more: whether force `+
+      `produces them, and whether an enzyme reaches the site once exposed, are separate questions.`,{});
+    if(Gt.pairs.length) d.table(["Gln","Lys","Competent in","Correlation","Verdict"],
+      Gt.pairs.slice(0,12).map(x=>[x.gln.key, x.lys.key,
+        (x.fraction*100).toFixed(0)+"%", isFinite(x.rho)?x.rho.toFixed(2):"\u2014",
+        x.classification]),[1.6,1.6,1.3,1.3,2]);
+  }
+
+  if(ST.dendro){
+    d.heading("Structural dendrogram",2);
+    const D2=ST.dendro;
+    d.text(`${D2.entries.length} structures were aligned all against all and clustered by `+
+      `${D2.method==="upgma"?"UPGMA":"neighbour joining"} on `+
+      `${D2.metric==="rmsd"?"RMSD":"one minus the TM-score"}`+
+      (D2.reps?`, with ${D2.reps} bootstrap replicates`:"")+`. This is a dendrogram of structural `+
+      `similarity and not a phylogeny: structural distance saturates, and it responds to `+
+      `conformational state, crystallisation and resolution as readily as to divergence. Read the `+
+      `clustering, and do not read the branch lengths as time.`,{});
+    d.text(`Newick: ${newick(D2.tree)}`,{font:"F3",size:7.5});
+  }
+
+  if(ST.afm){
+    d.heading("Atomic force microscopy",2);
+    d.text(`A topograph was simulated from ${ST.afm.source} with a ${ST.afm.cfg.tipRadius} A tip `+
+      `closing into a ${ST.afm.cfg.halfAngle} degree cone: ${ST.afm.sim.height.toFixed(1)} A tall over `+
+      `${(ST.afm.sim.footprint/100).toFixed(0)} nm2. The height is preserved by the tip; the lateral `+
+      `size is broadened.`,{});
+    if(ST.afmFit) d.text(`Fitted against a measured image, the best orientation gives a correlation of `+
+      `${ST.afmFit.best.cc.toFixed(3)} with a height mismatch of `+
+      `${(ST.afmFit.best.nrms*100).toFixed(0)} per cent. `+
+      (ST.afmFit.degenerate?`${ST.afmFit.rivals.length} orientations differing by more than `+
+        `${ST.afmFit.cfg.distinct} degrees fit about as well, so the image does not determine which `+
+        `face is up.`:`No orientation differing by more than ${ST.afmFit.cfg.distinct} degrees fits `+
+        `comparably, so the image does pick out a face.`)+` A poor fit is the informative outcome: at `+
+      `this resolution many shapes give similar topographs, while disagreement in height or footprint `+
+      `is strong evidence that something is wrong.`,{});
+  }
+
+  if(ST.nullModel){
+    d.heading("Centrality against chance",2);
+    const N2=ST.nullModel;
+    const sig=N2.rows.filter(x=>x.q<0.05&&x.z>0);
+    d.text(`The network was randomised ${N2.runs} times by double edge swap, which holds every degree `+
+      `fixed while rewiring the topology, and the observed edge weights were reassigned at random. `+
+      `${sig.length} residues are more central than that randomisation accounts for. Significance is `+
+      `judged on the z-score with a Benjamini and Hochberg correction; the empirical p-value cannot `+
+      `fall below one over the number of randomisations plus one, which is why it is not the basis of `+
+      `the judgement.`,{});
+    if(sig.length) d.table(["Residue","Observed","Null mean","z","q"],
+      sig.slice(0,12).map(x=>[x.r.key, x.observed.toFixed(4), x.nullMean.toFixed(4),
+        isFinite(x.z)?x.z.toFixed(2):"inf", x.q.toExponential(1)]),[2,1.4,1.6,1,1.2]);
+  }
+
+  if(ST.batch){
+    d.heading("Batch",2);
+    const B2=ST.batch;
+    d.text(`${BATCH_ANALYSES[B2.analysis].label} was run across ${B2.rows.length} structures in `+
+      `${B2.seconds} s`+(B2.failures.length?`, with ${B2.failures.length} that could not be read`:"")+
+      `. The structural unit used is recorded for each, because it changes the answer.`,{});
+    const cols=BATCH_ANALYSES[B2.analysis].columns;
+    d.table(cols.concat(["unit"]),
+      B2.rows.slice(0,14).map(r=>cols.map(c=>String(r[c]===undefined?"":r[c])).concat([r._unit])),
+      cols.map(()=>1.4).concat([1.6]));
+  }
+
+  if(ST.manifest){
+    d.heading("Provenance",2);
+    const Mf=ST.manifest;
+    d.text(`A session manifest was written on ${Mf.generated}. It records `+
+      `${(Mf.inputs||[]).length} inputs by hash, the settings in force, and a digest of the results `+
+      `(${Mf.resultsHash.algorithm} ${Mf.resultsHash.value.slice(0,32)}). Re-running these analyses on `+
+      `the same inputs with the same settings must reproduce that digest.`,{});
+    if((Mf.inputs||[]).length) d.table(["Input","Name","Bytes","Hash"],
+      Mf.inputs.map(i=>[i.kind, i.name, String(i.bytes), i.hash.value.slice(0,24)]),[1.4,2,1,3]);
   }
 
   d.heading("Scope and limitations",2);
