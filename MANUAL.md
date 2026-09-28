@@ -101,14 +101,17 @@ instrument. The sign, and the ranking within a series of substitutions at the sa
 are what it supports; the absolute value is not, because the function is not parameterised
 against measured mutation thermodynamics.
 
-If the structure has more than one chain, a rigid interface energy is also reported for
-each chain boundary.
+If the structure has more than one chain, an interface interaction energy is reported for
+each chain boundary, including the desolvation of the surface each side loses on association
+and the buried area itself. The partners are held in their bound conformation and nothing is
+sampled, so it ranks interfaces rather than measuring binding; for that, use the alchemical
+binding route above.
 
 ---
 
 ## 5 · Sampled free energy
 
-Panel 5 offers three routes, and the difference between them is the difference between a
+Panel 5 offers four routes, and the difference between them is the difference between a
 number and a measurement.
 
 **Ensemble averaging** runs Metropolis Monte Carlo in torsion space at a stated
@@ -127,6 +130,13 @@ rather than a single one.
 
 **Trajectory averaging** rebuilds and rescores the mutation independently in each frame of
 a loaded trajectory.
+
+**Alchemical binding** asks a different question with the same machinery. Instead of taking
+the reference leg with the environment stripped away, it repeats the transformation in the
+isolated chain, so that everything intramolecular cancels and what remains is the effect of
+the substitution on association. A structure with one chain refuses it. Expect more scatter
+than for a folding calculation at equal effort, because two independently sampled legs are
+subtracted and their noise compounds rather than cancels.
 
 Set the number of independent repeats to more than one. Uncertainty is taken from the
 scatter between repeats, not from block averaging within a single run, because the
@@ -294,7 +304,7 @@ and that intersection is usually the interesting one.
 
 ---
 
-## Electrostatics
+## 17 · Electrostatics
 
 The linearised Poisson–Boltzmann equation is solved by successive over-relaxation on a
 dielectric map built from the structure, with Debye screening in the solvent and boundary
@@ -320,7 +330,7 @@ delocalised, tyrosine above all, have their desolvation overstated.
 
 ---
 
-## Glycans
+## 18 · Glycans
 
 Modelled sugars are detected, assembled into trees by connectivity, and linked to their
 attachment residue as N-linked or O-linked. Sequons — N-X-S/T on consecutive residues with
@@ -341,7 +351,7 @@ accessible when a sugar almost certainly covers it, and should not be read as a 
 
 ---
 
-## Mechanics
+## 16 · Mechanics
 
 Give two attachment points, or leave the boxes empty to pull on the termini of the first
 chain. Each contact is placed along that axis and given a resistance from its type, scaled
@@ -359,7 +369,7 @@ changes the answer completely, which is the physics rather than a defect.
 
 ---
 
-## Atomic force microscopy
+## 14 · Atomic force microscopy
 
 The tool simulates what an AFM tip would trace over the molecule: it lays the structure, or
 a density map above a contour, on the substrate, builds the envelope, and dilates it by a
@@ -381,7 +391,7 @@ the tip presses into the molecule, by an amount no calculation here can supply.
 
 ---
 
-## Structural dendrogram
+## 15 · Structural dendrogram
 
 Select several structures. Each pair is aligned geometrically — superpose, reassign every
 residue to its nearest partner within a shrinking cutoff, repeat, keeping the assignment
@@ -397,7 +407,7 @@ the branch lengths as time or the arrangement as descent.
 
 ---
 
-## Design
+## 19 · Design
 
 Two scans ask where a feature could be placed rather than where one already is.
 
@@ -417,7 +427,26 @@ candidate to test, not a prediction.
 
 ---
 
-## Batch
+## 20 · Binding hotspots
+
+Ranks every interface residue by what replacing it costs the interface, scores the same
+substitution against the whole structure, and removes the candidates that would waste a
+mutant: residues in a disulfide, coordinating a metal, carrying an isopeptide, whose only
+partner is a crystallographic mate, or lying under a modelled glycan. Poorly supported
+contacts and uncommitted predicted aligned error register as cautions. Substitutions are
+proposed to suit the residue rather than defaulting to alanine throughout: charge reversal
+for a salt bridge, tryptophan to phenylalanine rather than to alanine, tyrosine to
+phenylalanine to separate hydrogen bonding from stacking. The leading candidates can then be
+measured by the alchemical binding calculation.
+
+Read the two costs together. A large interface cost with a small structural cost is a clean
+experiment; both large may simply misfold, and a binding assay would then report a loss that
+says nothing about the interface. Check your construct numbering before ordering anything,
+and treat the list as a prioritisation of experiments rather than a substitute for them.
+
+---
+
+## 21 · Batch
 
 Run one analysis across many structures at once: interaction summary, Gln–Lys competence,
 cavities and pockets, chain interfaces, or water bridges. Each file is parsed and analysed
@@ -431,7 +460,7 @@ The single-structure session is untouched by a batch run.
 
 ---
 
-## Reproducibility
+## 22 · Reproducibility
 
 **Save session manifest** records a hash of every input — structure, map, PAE, trajectory,
 alignment, second structure — along with the settings and a digest of the results, using
@@ -451,9 +480,10 @@ produced the numbers.
 
 ## Export
 
-The Export panel produces a written PDF report, a machine-readable JSON report carrying
-every computed section with its parameters, a contacts CSV, the mutant coordinates, and the
-charts as SVG. The **Charts** tab assembles every plot the current session supports; each
+The Export panel produces a written PDF report carrying every section you have run, with its
+charts drawn as vectors beside the tables; a machine-readable JSON report with every computed
+section and its parameters; a contacts CSV; the mutant coordinates; and the charts
+individually as SVG. The **Charts** tab assembles every plot the current session supports; each
 saves individually.
 
 If a download is refused, the text appears in the Export tab instead and can be copied. On
