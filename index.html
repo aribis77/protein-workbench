@@ -814,7 +814,8 @@ END
           <select id="femethod">
             <option value="ensemble">Monte Carlo ensemble average</option>
             <option value="traj">Average over trajectory frames</option>
-            <option value="alchemy" selected>Alchemical, integration and BAR</option>
+            <option value="alchemy" selected>Alchemical ΔΔG of folding</option>
+            <option value="alchemybind">Alchemical ΔΔG of binding</option>
           </select>
         </label>
         <label class="field"><span>Effort</span>
@@ -1039,6 +1040,21 @@ END
       </div>
 
       <div class="group">
+        <div class="gtitle">Binding hotspots</div>
+        <div class="row">
+          <label class="field"><span>On chain</span><select id="hschain"></select></label>
+          <label class="field"><span>Against</span><select id="hspartner"><option value="">any other chain</option></select></label>
+        </div>
+        <button id="btnhotspot" disabled>Rank interface residues</button>
+        <div class="row" style="margin-top:6px">
+          <label class="field"><span>Confirm top</span><input type="number" id="hstop" value="6" min="1" max="20"></label>
+          <button id="btnhsconfirm" style="flex:0 0 110px" disabled>Alchemically</button>
+        </div>
+        <div class="hint">Ranks every interface residue by what alanine costs the interface, removes
+          the ones not worth a mutant, then measures the leading candidates properly.</div>
+      </div>
+
+      <div class="group">
         <div class="gtitle">Batch</div>
         <label class="field"><span>Ask of every structure</span>
           <select id="batchwhat"></select></label>
@@ -1110,6 +1126,7 @@ END
         <button class="tab" data-pane="p-diff">Before / after</button>
         <button class="tab" data-pane="p-energy">Energetics</button>
         <button class="tab" data-pane="p-sampling">Sampling</button>
+        <button class="tab" data-pane="p-hotspot">Hotspots</button>
         <button class="tab" data-pane="p-afm">AFM</button>
         <button class="tab" data-pane="p-tree">Dendrogram</button>
         <button class="tab" data-pane="p-mech">Mechanics</button>
@@ -1141,6 +1158,7 @@ END
       <div class="pane" id="p-diff"></div>
       <div class="pane" id="p-energy"></div>
       <div class="pane" id="p-sampling"><p class="sub">Build a mutant, then run a sampled free energy to replace the single-structure estimate with an ensemble result and an error bar.</p></div>
+      <div class="pane" id="p-hotspot"><p class="sub">A shortlist of interface residues worth making in the laboratory.</p></div>
       <div class="pane" id="p-afm"><p class="sub">Simulate an AFM topograph from the structure or a density map, and fit an orientation to a measured image.</p></div>
       <div class="pane" id="p-tree"><p class="sub">Choose several structures to align all against all and cluster them by shape.</p></div>
       <div class="pane" id="p-mech"><p class="sub">Pull on two points and see which contacts take the load and in what order they would give way.</p></div>
@@ -4006,7 +4024,8 @@ function loadStructure(text, name){
     ST.ref=null; ST.compare=null; ST.cmpS=null; ST.conservation=null; ST.consColor=false;
     ST.confidence=null; ST.paeMap=null; ST.plddtColor=false; ST.cavities=null; ST.pockets=null; ST.gnm=null; ST.water=null;
     ST.evidence=null; ST.support_summary=null; ST.crystal=null; ST.nullModel=null;
-    ST.designSS=null; ST.designXL=null; ST.gated=null; ST.glycan=null; ST.xlinkShadowed=null; ST.elec=null; ST.mech=null; ST.dendro=null; ST.afm=null; ST.afmFit=null;
+    ST.designSS=null; ST.designXL=null; ST.gated=null; ST.glycan=null; ST.xlinkShadowed=null; ST.elec=null; ST.mech=null; ST.dendro=null; ST.afm=null; ST.afmFit=null; ST.hotspots=null;
+    $("#btnhsconfirm").disabled=true;
     $("#btnnull").disabled=true;
     $("#btnplddt").disabled=true; $("#btnconf").disabled=!ST.pae;
     $("#btnconscolor").disabled=true;
@@ -4027,7 +4046,9 @@ function loadStructure(text, name){
     fillAssemblies(parsed);
     $("#btnpdf").disabled=false; $("#btncharts").disabled=false;
     $("#btnmanifest").disabled=false;
-    fillChains(); $("#btnanalyse").disabled=false; $("#btnmutate").disabled=false;
+    fillChains(); fillHotspotChains();
+    $("#btnhotspot").disabled=ST.wt.chains.length<2;
+    $("#btnanalyse").disabled=false; $("#btnmutate").disabled=false;
     $("#btnqk").disabled=false; $("#btnnet").disabled=false; $("#btngated").disabled=false; $("#btnglycan").disabled=false; $("#btnelec").disabled=false;
     $("#btnmech").disabled=false; $("#btncav").disabled=false; $("#btngnm").disabled=false; $("#btnwater").disabled=false;
     $("#btnevidence").disabled=false; $("#btnxtal").disabled=false;
@@ -4589,6 +4610,10 @@ function regionSubset(S, key, radius){
   const idx=[]; keep.forEach(ri=>S.residues[ri].atoms.forEach(i=>idx.push(i)));
   return idx;
 }
+/* The interaction across a chain boundary, together with the surface each side
+   loses on association and what that burial costs or gains. It is still a single
+   rigid conformation with no relaxation of the free partners, so it ranks
+   interfaces rather than measuring binding. */
 function interchainEnergy(S, chain){
   const g=makeGrid(S.atoms,8.0); let vdw=0,elec=0,hb=0,rep=0;
   for(let i=0;i<S.atoms.length;i++){
@@ -4602,8 +4627,34 @@ function interchainEnergy(S, chain){
       if(d<3.5&&d>2.2&&(a.elem==="N"||a.elem==="O")&&(b.elem==="N"||b.elem==="O")) hb+=hbEnergy(d,null,null);
     }
   }
+  /* desolvation on burial: the area each atom loses when the two sides come
+     together, weighted by its solvation parameter */
+  const real=S.atoms.map((a,i)=>({a,i})).filter(x=>!x.a.water&&!x.a.phantom);
+  const sideA=real.filter(x=>x.a.chain===chain), sideB=real.filter(x=>x.a.chain!==chain);
+  let desolv=0, buried=0;
+  if(sideA.length&&sideB.length){
+    const sasaC=computeSASA(S.atoms, null);
+    const part=list=>{
+      const sub=buildStructure({atoms:list.map(x=>({...x.a})), ssbonds:[], links:[]});
+      const sa=computeSASA(sub.atoms, null);
+      list.forEach((x,k)=>{
+        const free=sa[k], bound=sasaC[x.i];
+        const lost=free-bound;
+        if(lost>0){ buried+=lost; desolv-=lost*aspOf(x.a)/1000; }
+      });
+    };
+    part(sideA); part(sideB);
+  }
   return {vdw:+vdw.toFixed(2),rep:+rep.toFixed(2),elec:+elec.toFixed(2),hb:+hb.toFixed(2),
-          total:+(vdw+rep+elec+hb).toFixed(2)};
+          desolv:+desolv.toFixed(2), buriedArea:+buried.toFixed(0),
+          total:+(vdw+rep+elec+hb+desolv).toFixed(2)};
+}
+/* only the chain of interest, as it would be on its own */
+function chainSubset(S, chain){
+  const atoms=S.atoms.filter(a=>a.chain===chain&&!a.phantom).map(a=>({...a}));
+  if(!atoms.length) throw new Error(`chain ${chain} has no atoms`);
+  return buildStructure({atoms, ssbonds:S.ssbonds.filter(b=>
+    b.chain1===chain&&b.chain2===chain), links:[]});
 }
 async function scoreEnergies(){
   if(!ST.wt) return;
@@ -4660,10 +4711,16 @@ function showEnergy(){
     const db=E.bindM.total-E.bindW.total;
     bind=`<h3 style="font-size:13px;margin:16px 0 6px">Interface interaction energy, chain ${ST.site.chain} against the rest</h3>
       <table class="energytable"><thead><tr><th>Term</th><th class="num">WT</th><th class="num">Mutant</th><th class="num">Δ</th></tr></thead><tbody>
-      ${["vdw","rep","elec","hb","total"].map(k=>`<tr><td>${TERMLABEL[k]||k}</td><td class="num">${E.bindW[k].toFixed(2)}</td>
+      ${["vdw","rep","elec","hb","desolv","total"].map(k=>`<tr><td>${
+        k==="desolv"?"Desolvation on burial":(TERMLABEL[k]||k)}</td><td class="num">${E.bindW[k].toFixed(2)}</td>
         <td class="num">${E.bindM[k].toFixed(2)}</td><td class="num">${(E.bindM[k]-E.bindW[k]).toFixed(2)}</td></tr>`).join("")}
       </tbody></table>
-      <p class="sub">Δ(interface) = ${db>0?"+":""}${db.toFixed(2)} kcal/mol. This is a rigid-body interaction energy with no unbound-state relaxation and no explicit desolvation of the interface, so treat it as a ranking signal for the binding effect, not as ΔΔG<sub>bind</sub>.</p>`;
+      <p class="sub">Δ(interface) = ${db>0?"+":""}${db.toFixed(2)} kcal/mol, burying
+      ${E.bindW.buriedArea} Å² in the wild type against ${E.bindM.buriedArea} Å² in the mutant.
+      This is a rigid interface interaction energy: it now includes the desolvation of the surface
+      each side loses on association, but the partners are held in their bound conformation and
+      nothing is sampled, so it ranks interface effects rather than measuring them. For a binding
+      free energy use the alchemical binding option in panel 5.</p>`;
   }
   setPane("p-energy",`
     <div class="dG" style="margin-bottom:12px">
@@ -4730,16 +4787,36 @@ function rotamerEntropy(chiSets, T){
   return -T*KB*S;                                            /* kcal/mol */
 }
 /* Alchemical double free energy difference with independent repeats */
+/* Two double differences are available and they answer different questions.
+   For stability the reference leg is the same transformation with the
+   environment stripped away, so the result is the effect on folding. For
+   binding the reference leg is the same transformation carried out in the
+   isolated chain, so everything intramolecular cancels and what remains is the
+   effect on association. They are not interchangeable and the second requires
+   a partner chain to exist. */
 async function alchemicalFreeEnergy(cfg, progress){
   const runs=[];
+  const binding=cfg.leg==="binding";
+  let monomer=null;
+  if(binding){
+    const chain=ST.site.chain;
+    if(ST.wt.chains.length<2)
+      throw new Error("a binding free energy needs more than one chain: this structure has only "+
+        ST.wt.chains[0]);
+    monomer=chainSubset(ST.wt, chain);
+    if(!monomer.rmap.get(ST.site.key))
+      throw new Error("the mutated residue is not present in its own chain subset");
+  }
   for(let rep=0; rep<cfg.repeats; rep++){
     const dual=buildDualSystem(ST.wt, ST.site.key, ST.mutInfo.to, +$("#shell").value);
-    const ref=referenceSystem(dual);
+    const ref=binding
+      ? buildDualSystem(monomer, ST.site.key, ST.mutInfo.to, +$("#shell").value)
+      : referenceSystem(dual);
     const seed=(cfg.seed||1)+rep*104729;
     const folded=await alchemy(dual.D,dual.gA,dual.gB,dual.shell,
-      {...cfg,seed,skip:dual.skip}, (w,n)=>progress(rep,"folded",w,n));
+      {...cfg,seed,skip:dual.skip}, (w,n)=>progress(rep,binding?"complex":"folded",w,n));
     const unfolded=await alchemy(ref.D,ref.gA,ref.gB,ref.shell,
-      {...cfg,seed:seed+7,skip:ref.skip}, (w,n)=>progress(rep,"reference",w,n));
+      {...cfg,seed:seed+7,skip:ref.skip}, (w,n)=>progress(rep,binding?"free chain":"reference",w,n));
     runs.push({folded,unfolded,
       ddG:folded.dG-unfolded.dG,
       ddGbar:folded.dGbar-unfolded.dGbar,
@@ -4747,7 +4824,8 @@ async function alchemicalFreeEnergy(cfg, progress){
   }
   const vals=runs.map(r=>r.ddG);
   const bars=runs.map(r=>r.ddGbar).filter(isFinite);
-  return {runs, mean:mean(vals), sd:runs.length>1?sd(vals):NaN,
+  return {runs, leg:binding?"binding":"stability", mean:mean(vals),
+    sd:runs.length>1?sd(vals):NaN,
     sem:runs.length>1?sd(vals)/Math.sqrt(runs.length):runs[0].within,
     within:mean(runs.map(r=>r.within)),
     bar:bars.length?mean(bars):NaN, barSD:bars.length>1?sd(bars):NaN};
@@ -4773,9 +4851,12 @@ async function runSampled(){
     result={kind:"ensemble", data:await ensembleFreeEnergy(cfg, async tag=>{
       busy("Sampled the "+(tag==="wt"?"wild type":"mutant")+"…"); await nextFrame(); })};
   }else{
-    result={kind:"alchemy", data:await alchemicalFreeEnergy(cfg, async(rep,leg,w,n)=>{
-      busy(`Repeat ${rep+1} of ${cfg.repeats}, ${leg} leg, window ${w} of ${n}…`);
-      await nextFrame(); })};
+    const binding=method==="alchemybind";
+    result={kind:"alchemy", binding,
+      data:await alchemicalFreeEnergy({...cfg, leg:binding?"binding":"stability"},
+        async(rep,leg,w,n)=>{
+          busy(`Repeat ${rep+1} of ${cfg.repeats}, ${leg} leg, window ${w} of ${n}…`);
+          await nextFrame(); })};
   }
   result.ms=Math.round(performance.now()-t0); result.cfg=cfg; result.method=method;
   ST.sampling=result;
@@ -4870,8 +4951,21 @@ function showSampling(){
   if(maxsem>1.5) quality.push("at least one λ window has a noisy dU/dλ ("+maxsem.toFixed(2)+" kcal/mol)");
   setPane("p-sampling",`
     <div class="dG" style="margin-bottom:6px"><b class="${d.mean>0?'losscell':'gaincell'}">
-      ΔΔG = ${d.mean>0?"+":""}${d.mean.toFixed(2)} ± ${err.toFixed(2)} kcal/mol</b>
+      ΔΔG<sub>${d.leg==="binding"?"bind":"fold"}</sub> = ${d.mean>0?"+":""}${d.mean.toFixed(2)} ± ${err.toFixed(2)} kcal/mol</b>
       <span class="sub"> &nbsp;${lbl}, thermodynamic integration over ${r0.folded.lambdas.length} λ windows at ${R.cfg.T} K</span></div>
+    <p class="sub">${d.leg==="binding"
+      ? `The transformation was carried out twice: once in the complex and once in the isolated chain
+         ${ST.site.chain}. Everything intramolecular is common to both and cancels, so what remains is
+         the effect of the substitution on association. Positive means the mutant binds less tightly.
+         The free chain is taken as it sits in the complex and is not allowed to relax into its own
+         unbound conformation, which is the main approximation here. Expect more scatter than for a
+         folding calculation at the same effort: two independently sampled legs are being
+         subtracted, so their noise compounds rather than cancels, and a binding number from one or
+         two quick repeats can be wrong by several kcal/mol. Use more repeats and a longer schedule
+         before quoting one.`
+      : `The reference leg is the same transformation with the environment removed, so this is the
+         effect on folding stability. Positive means the mutant is less stable. For the effect on
+         binding, choose the binding option, which uses the isolated chain as its reference instead.`}</p>
     <p class="sub">Bennett acceptance ratio on the same samples gives
       ${isFinite(d.bar)?(d.bar>0?"+":"")+d.bar.toFixed(2)+" kcal/mol":"no usable estimate"}.
       Positive means the mutant is less stable. ${R.cfg.repeats} independent repeat${R.cfg.repeats>1?"s":""},
@@ -6149,6 +6243,114 @@ async function alanineScan(){
   goPane("p-scan");
   log(`Alanine scan of chain ${chain}: ${hot.length} hotspots of ${list.length} interface residues.`,"ok");
   $("#btnreport").disabled=false; $("#btnpdf").disabled=false;
+}
+
+/* ============================================================
+   BINDING HOTSPOTS
+   A shortlist of residues worth making in the laboratory. The rigid
+   scan ranks every interface residue, the alchemical calculation
+   measures the leading ones, and a set of filters removes candidates
+   that would waste a mutant for reasons no energy function sees.
+   ============================================================ */
+/* what to make, given what is there. Alanine is the default, but deleting a
+   large side chain removes so much surface that the result is hard to read, and
+   for a charged hotspot a reversal is the sharper experiment. */
+function proposeSubstitutions(r){
+  const big=["TRP","TYR","PHE","ARG","LYS","MET","LEU","ILE","GLU","GLN"];
+  const out=[{to:"ALA", why:"the standard deletion"}];
+  if(["ARG","LYS"].includes(r.resn))
+    out.push({to:"GLU", why:"charge reversal, a sharper test than deletion if the contact is ionic"});
+  if(["ASP","GLU"].includes(r.resn))
+    out.push({to:"LYS", why:"charge reversal, a sharper test than deletion if the contact is ionic"});
+  if(r.resn==="TRP") out.push({to:"PHE", why:"a conservative step, since Trp to Ala removes too much surface to interpret"});
+  if(r.resn==="TYR") out.push({to:"PHE", why:"removes the hydroxyl alone, separating hydrogen bonding from stacking"});
+  if(r.resn==="PHE") out.push({to:"LEU", why:"keeps the volume, removes the ring"});
+  if(["LEU","ILE","MET","VAL"].includes(r.resn))
+    out.push({to:"ALA", why:"deletion is appropriate for an aliphatic contact"});
+  if(r.resn==="HIS") out.push({to:"ALA", why:"note that the protonation state may itself be in question"});
+  return {primary:out[0], alternatives:out.slice(1), large:big.includes(r.resn)};
+}
+/* reasons a residue should not be mutated, whatever its score */
+function hotspotFilters(S, r, ctx){
+  const out=[];
+  const contacts=(ctx.contacts||[]).filter(c=>c.ri===r.ridx||c.rj===r.ridx);
+  if(contacts.some(c=>c.type==="disulfide"))
+    out.push({level:"disqualify", text:"forms a disulfide, so a mutation would alter folding rather than binding"});
+  if(contacts.some(c=>c.type==="metal"))
+    out.push({level:"disqualify", text:"coordinates a metal"});
+  if(contacts.some(c=>c.type==="isopeptide"))
+    out.push({level:"disqualify", text:"carries an isopeptide crosslink"});
+  if(ctx.crystal){
+    const partners=new Set(contacts.filter(c=>c.inter)
+      .map(c=>S.residues[c.ri===r.ridx?c.rj:c.ri].chain));
+    const xtal=ctx.crystal.origin.filter(o=>
+      (o.a===r.chain&&partners.has(o.b))||(o.b===r.chain&&partners.has(o.a)));
+    if(xtal.length&&xtal.every(o=>o.crystallographic))
+      out.push({level:"disqualify",
+        text:"its only inter-chain partner is related by a crystallographic operator, so this is packing rather than an interface"});
+  }
+  if(ctx.glycan){
+    const kind=ctx.glycan.residueShadow.get(r.ridx);
+    if(kind==="modelled") out.push({level:"disqualify", text:"lies under a modelled glycan"});
+    else if(kind) out.push({level:"caution", text:"lies within the assumed volume of an unoccupied sequon, so a glycan may cover it"});
+  }
+  if(ctx.support){
+    const rs=residueSupport(S, ctx.contacts, r.ridx);
+    if(rs&&rs.value<0.34) out.push({level:"caution",
+      text:`its contacts are poorly supported by the evidence (mean ${rs.value.toFixed(2)}), so the geometry may not be real`});
+  }
+  if(ctx.confidence&&ctx.pae){
+    const bad=contacts.filter(c=>isFinite(c.pae)&&c.pae>15).length;
+    if(bad&&bad===contacts.filter(c=>isFinite(c.pae)).length)
+      out.push({level:"caution", text:"every contact it makes has a predicted aligned error above 15 Å, so the prediction does not place this interface"});
+  }
+  if(r.resn==="PRO") out.push({level:"caution", text:"proline, so a substitution changes backbone propensity as well as the side chain"});
+  if(r.resn==="GLY") out.push({level:"disqualify", text:"glycine has no side chain to remove"});
+  if(r.resn==="ALA") out.push({level:"disqualify", text:"already alanine"});
+  return out;
+}
+async function hotspotScan(S, chain, cfg, onStep){
+  cfg=Object.assign({shell:6, minContacts:1}, cfg||{});
+  const iface=new Map();
+  (cfg.contacts||[]).filter(c=>c.inter).forEach(c=>{
+    [[c.ri,c.rj],[c.rj,c.ri]].forEach(([a,b])=>{
+      const r=S.residues[a], p=S.residues[b];
+      if(r.chain!==chain||!r.std) return;
+      if(cfg.partner&&p.chain!==cfg.partner) return;
+      if(!iface.has(a)) iface.set(a,{r, partners:new Set(), n:0});
+      iface.get(a).partners.add(p.chain); iface.get(a).n++;
+    });
+  });
+  const list=[...iface.values()].filter(x=>x.n>=cfg.minContacts);
+  if(!list.length) throw new Error(`no interface residues found on chain ${chain}`);
+  const bindW=interchainEnergy(S, chain);
+  const rows=[];
+  for(let i=0;i<list.length;i++){
+    const {r, partners, n}=list[i];
+    if(onStep) await onStep(i, list.length, r);
+    const filters=hotspotFilters(S, r, cfg);
+    const sub=proposeSubstitutions(r);
+    let dBind=NaN, dFoldRigid=NaN;
+    if(!filters.some(f=>f.level==="disqualify")){
+      try{
+        const b=buildMutant(S, r.key, sub.primary.to, {mode:"full", shell:cfg.shell});
+        dBind=interchainEnergy(b.M, chain).total-bindW.total;
+        /* the same substitution scored against the whole structure, as a crude
+           check on whether it also destabilises rather than only unbinding */
+        const eW=energyOf(S, computeSASA(S.atoms,null), null);
+        const eM=energyOf(b.M, computeSASA(b.M.atoms,null), null);
+        if(eW&&eM) dFoldRigid=eM.total-eW.total;
+      }catch(err){ filters.push({level:"caution", text:"could not be modelled: "+err.message}); }
+    }
+    rows.push({r, contacts:n, partners:[...partners], dBind, dFoldRigid, filters, sub,
+      disqualified:filters.some(f=>f.level==="disqualify"),
+      conservation:cfg.conservation?cfg.conservation.get(r.ridx):undefined,
+      betweenness:cfg.betweenness?cfg.betweenness.get(r.ridx):undefined});
+  }
+  const live=rows.filter(x=>!x.disqualified&&isFinite(x.dBind));
+  live.sort((a,b)=>b.dBind-a.dBind);
+  return {rows, ranked:live, chain, interfaceEnergy:bindW,
+    considered:list.length, usable:live.length};
 }
 
 /* ============================================================
@@ -8251,6 +8453,141 @@ function PDFDoc(opts){
 }
 
 /* ============================================================
+   HOTSPOT DRIVER
+   ============================================================ */
+function fillHotspotChains(){
+  const a=$("#hschain"), b=$("#hspartner");
+  if(!a||!ST.wt) return;
+  a.innerHTML=""; b.innerHTML='<option value="">any other chain</option>';
+  ST.wt.chains.forEach(c=>{
+    const o=document.createElement("option"); o.value=c; o.textContent="Chain "+c; a.appendChild(o);
+    const p=document.createElement("option"); p.value=c; p.textContent="Chain "+c; b.appendChild(p);
+  });
+}
+$("#btnhotspot").onclick=()=>hotspotRun().catch(e=>log("Hotspots: "+e.message,"err"))
+  .finally(()=>busy(null));
+async function hotspotRun(){
+  if(!ST.contactsWT){ await $("#btnanalyse").onclick(); }
+  if(ST.wt.chains.length<2) throw new Error("a binding hotspot needs more than one chain");
+  const chain=$("#hschain").value||ST.wt.chains[0];
+  const partner=$("#hspartner").value||null;
+  busy("Scanning the interface\u2026"); await nextFrame();
+  const t0=performance.now();
+  const R=await hotspotScan(ST.wt, chain, {
+    contacts:ST.contactsWT, shell:+$("#shell").value||6, partner,
+    crystal:ST.crystal, glycan:ST.glycan, support:ST.support_summary,
+    confidence:ST.confidence, pae:ST.pae,
+    conservation:ST.conservation?new Map(ST.conservation.ranked.map(x=>[x.r.ridx,x.conservation])):null,
+    betweenness:ST.bc||null
+  }, async(i,n,r)=>{ busy(`${i+1} of ${n}: ${r.resn}${r.resi}`); await nextFrame(); });
+  R.seconds=+((performance.now()-t0)/1000).toFixed(1);
+  ST.hotspots=R;
+  $("#btnhsconfirm").disabled=false;
+  renderHotspots();
+  log(`Hotspots: ${R.usable} of ${R.considered} interface residues are worth a mutant, `+
+      `${R.rows.filter(x=>x.disqualified).length} disqualified, ${R.seconds} s.`,"ok");
+}
+function renderHotspots(){
+  const R=ST.hotspots; if(!R) return;
+  const strong=R.ranked.filter(x=>x.dBind>1);
+  const rows=R.ranked.slice(0,25);
+  const dq=R.rows.filter(x=>x.disqualified);
+  const measured=R.ranked.filter(x=>x.measured);
+  const cell=x=>{
+    const cautions=x.filters.filter(f=>f.level==="caution");
+    return `<tr>
+      <td>${resLabel(x.r)}</td>
+      <td class="num">${x.contacts}</td>
+      <td class="num ${x.dBind>1?"losscell":""}">${x.dBind>0?"+":""}${x.dBind.toFixed(2)}</td>
+      <td class="num">${isFinite(x.dFoldRigid)?(x.dFoldRigid>0?"+":"")+x.dFoldRigid.toFixed(2):"\u2014"}</td>
+      <td>${x.r.resn}\u2192${x.sub.primary.to}</td>
+      <td class="sub">${cautions.length?cautions.map(c=>c.text).join("; "):
+        (x.sub.alternatives.length?x.sub.alternatives[0].why:"")}</td>
+      ${measured.length?`<td class="num">${x.measured?
+        `${x.measured.mean>0?"+":""}${x.measured.mean.toFixed(2)} ± ${(x.measured.sd||0).toFixed(2)}`
+        :""}</td>`:""}
+    </tr>`;
+  };
+  setPane("p-hotspot",`
+    <div class="stats">
+      <div class="stat"><b>${R.considered}</b><i>interface residues on chain ${R.chain}</i></div>
+      <div class="stat"><b class="gaincell">${R.usable}</b><i>worth a mutant</i></div>
+      <div class="stat"><b class="losscell">${R.rows.length-R.usable}</b><i>disqualified</i></div>
+      <div class="stat"><b>${strong.length}</b><i>cost more than 1 kcal/mol</i></div>
+      <div class="stat"><b>${R.interfaceEnergy.buriedArea}</b><i>Å² buried</i></div>
+    </div>
+    <p class="sub">Each residue in turn was replaced and the change in the interface interaction energy
+    scored. That is a ranking instrument, not a measurement: use it to choose which few to put through
+    the alchemical binding calculation, which is what the button in the control column does.
+    ${measured.length?`The last column holds those measured values.`:""}</p>
+    <p class="sub">The column beside it is the same substitution scored against the whole structure. A
+    candidate with a large interface cost and a small structural cost is a clean experiment; one with
+    both large may simply misfold, and a binding assay would then report a loss that says nothing
+    about the interface.</p>
+    <table><thead><tr><th>Residue</th><th class="num">contacts</th>
+      <th class="num">Δ interface</th><th class="num">Δ structure</th><th>Make</th><th>Notes</th>
+      ${measured.length?`<th class="num">ΔΔG<sub>bind</sub></th>`:""}</tr></thead><tbody>
+      ${rows.map(cell).join("")}
+    </tbody></table>
+    ${dq.length?`<h3 style="font-size:13px;margin:14px 0 6px">Not worth a mutant</h3>
+    <p class="sub">These would waste an experiment for reasons no energy function sees.</p>
+    <table><thead><tr><th>Residue</th><th>Why not</th></tr></thead><tbody>
+      ${dq.slice(0,20).map(x=>`<tr><td>${resLabel(x.r)}</td>
+        <td class="sub">${x.filters.filter(f=>f.level==="disqualify").map(f=>f.text).join("; ")}</td>
+      </tr>`).join("")}
+    </tbody></table>`:""}
+    <div class="row" style="margin-top:12px"><button id="hscsv">Save the shortlist as CSV</button></div>
+    <p class="sub">Before ordering anything, check the numbering: the residue numbers in a deposited
+    structure are frequently not the numbering of your expression construct, and that mismatch has
+    ruined more mutagenesis than any prediction error. Hotspot prediction of this kind finds a useful
+    share of real hotspots and also produces false positives, so this is a prioritisation of
+    experiments rather than a substitute for them.</p>`);
+  goPane("p-hotspot");
+  $("#hscsv").onclick=()=>{
+    const cols=["residue","chain","contacts","dInterface","dStructure","substitution",
+      "measured_ddG_bind","measured_sd","disqualified","notes"];
+    const out=[cols.join(",")].concat(R.rows.map(x=>[
+      `${x.r.resn}${x.r.resi}`, x.r.chain, x.contacts,
+      isFinite(x.dBind)?x.dBind.toFixed(3):"", isFinite(x.dFoldRigid)?x.dFoldRigid.toFixed(3):"",
+      x.disqualified?"":`${x.r.resn}->${x.sub.primary.to}`,
+      x.measured?x.measured.mean.toFixed(3):"", x.measured?(x.measured.sd||0).toFixed(3):"",
+      x.disqualified?"yes":"no",
+      '"'+x.filters.map(f=>f.text).join("; ").replace(/"/g,'""')+'"'
+    ].join(","))).join("\n");
+    download(`hotspots_${R.chain}.csv`, out, "text/csv");
+  };
+}
+$("#btnhsconfirm").onclick=()=>hotspotConfirm().catch(e=>log("Hotspots: "+e.message,"err"))
+  .finally(()=>busy(null));
+async function hotspotConfirm(){
+  const R=ST.hotspots;
+  if(!R) throw new Error("rank the interface first");
+  const n=Math.max(1,Math.min(+$("#hstop").value||6, R.ranked.length));
+  const list=R.ranked.slice(0,n);
+  const saveSite=ST.site, saveTo=$("#mto").value, saveMethod=$("#femethod").value;
+  const cfg={...EFFORT[$("#feeffort").value], T:+$("#fetemp").value||300,
+    repeats:Math.max(2,+$("#ferep").value||2), seed:20260913, blocks:5, leg:"binding"};
+  for(let i=0;i<list.length;i++){
+    const x=list[i];
+    busy(`Measuring ${x.r.resn}${x.r.resi} (${i+1} of ${list.length})\u2026`); await nextFrame();
+    try{
+      ST.site=ST.wt.rmap.get(x.r.key);
+      $("#mto").value=x.sub.primary.to;
+      await runMutation();
+      const d=await alchemicalFreeEnergy(cfg, async(rep,leg,w,tot)=>{
+        busy(`${x.r.resn}${x.r.resi}: repeat ${rep+1}, ${leg} leg, window ${w} of ${tot}\u2026`);
+        await nextFrame(); });
+      x.measured={mean:d.mean, sd:d.sd, bar:d.bar};
+    }catch(err){ x.measured=null; log(`${x.r.resn}${x.r.resi}: ${err.message}`,"warn"); }
+  }
+  ST.site=saveSite; $("#mto").value=saveTo; $("#femethod").value=saveMethod;
+  renderHotspots();
+  const done=list.filter(x=>x.measured);
+  log(`Hotspots: ${done.length} of ${list.length} candidates measured alchemically. `+
+      `Compare the ranking against the measurement before choosing.`,"ok");
+}
+
+/* ============================================================
    AFM DRIVER
    ============================================================ */
 function heightImageSVG(img, opts){
@@ -9760,12 +10097,15 @@ function buildReportPDF(){
     const R=ST.sampling;
     if(R.kind==="alchemy"){
       const a=R.data;
+      const bind=a.leg==="binding";
       d.text(`An alchemical transformation was carried out over `+
         `${a.runs[0].folded.lambdas.length} lambda windows at ${R.cfg.T} K, with `+
         `${R.cfg.repeats} independent repeat${R.cfg.repeats>1?"s":""}. The wild-type side chain was `+
-        `decoupled as the mutant was coupled in, and the same transformation was repeated with the `+
-        `environment removed, so the quantity reported is a double free energy difference.`,{});
-      d.text(`ddG = ${a.mean>0?"+":""}${a.mean.toFixed(2)} +/- `+
+        `decoupled as the mutant was coupled in, and the same transformation was repeated `+
+        (bind?`in the isolated chain, so that everything intramolecular cancels and what remains is `+
+          `the effect of the substitution on association.`
+        :`with the environment removed, so the quantity reported is the effect on folding.`),{});
+      d.text(`${bind?"ddG(binding)":"ddG(folding)"} = ${a.mean>0?"+":""}${a.mean.toFixed(2)} +/- `+
         `${(isFinite(a.sd)?a.sem:a.within).toFixed(2)} kcal/mol by thermodynamic integration`+
         (isFinite(a.bar)?`, and ${a.bar.toFixed(2)} kcal/mol by the Bennett acceptance ratio on the `+
         `same samples.`:"."),{font:"F2",size:10});
@@ -10147,6 +10487,15 @@ $("#btnreport").onclick=()=>{
       fluctuations:ST.gnm.K.beads.map((b,i)=>({residue:b.r.key,
         predicted:+ST.gnm.fl.scaled[i].toFixed(2),
         deposited:isFinite(ST.gnm.fl.obs[i])?+ST.gnm.fl.obs[i].toFixed(2):null}))}:null),
+    hotspots: section("hotspots", ()=> ST.hotspots?{chain:ST.hotspots.chain,
+      considered:ST.hotspots.considered, usable:ST.hotspots.usable,
+      interfaceEnergy:ST.hotspots.interfaceEnergy,
+      candidates:ST.hotspots.rows.map(x=>({residue:x.r.key, contacts:x.contacts,
+        partners:x.partners, deltaInterface:isFinite(x.dBind)?+x.dBind.toFixed(3):null,
+        deltaStructure:isFinite(x.dFoldRigid)?+x.dFoldRigid.toFixed(3):null,
+        proposed:x.disqualified?null:x.sub.primary.to,
+        alternatives:x.sub.alternatives, disqualified:x.disqualified,
+        notes:x.filters, measured:x.measured||null}))}:null),
     afm: section("afm", ()=> (ST.afm||ST.afmFit)?{
       simulation: ST.afm?{source:ST.afm.source, settings:ST.afm.cfg,
         height:+ST.afm.sim.height.toFixed(2), footprint:+ST.afm.sim.footprint.toFixed(0)}:null,
