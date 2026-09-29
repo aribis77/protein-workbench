@@ -1,5 +1,7 @@
 # The Protein Workbench
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23021531.svg)](https://doi.org/10.5281/zenodo.23021531)
+
 A structural analysis workbench that runs entirely in a browser. One self-contained
 HTML file: no installation, no server, no account, and no coordinates ever leave the
 machine it is opened on.
@@ -116,7 +118,8 @@ restated in the tool at the point where the result appears.
 ## Citing
 
 A manuscript is in preparation. Until it appears, please cite the archived software
-release — see `CITATION.cff`, which GitHub renders as a "Cite this repository" button.
+release: Biswas, A. *The Protein Workbench* (v1.0.1). Zenodo. https://doi.org/10.5281/zenodo.23021531
+GitHub also renders `CITATION.cff` as a "Cite this repository" button.
 
 ## Licence
 

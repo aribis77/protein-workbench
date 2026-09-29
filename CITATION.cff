@@ -27,5 +27,6 @@ keywords:
   - AlphaFold confidence
   - transglutaminase crosslinking
 license: MIT
-version: 1.0.0
-date-released: "2026-09-27"
+doi: "10.5281/zenodo.23021531"
+version: 1.0.1
+date-released: "2026-09-28"
