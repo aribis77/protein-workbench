@@ -34,6 +34,22 @@ return an empty result that is easily mistaken for a negative finding. Switching
 clears everything derived from the previous one, because carrying a contact list across a
 change of residue numbering silently corrupts it.
 
+**Maps.** Load a map (MRC or CCP4, optionally gzipped) and it is read but not yet drawn. Press
+**Show map** to see it as a mesh contoured at a level you choose, in units of the map's own standard
+deviation above its mean, and carved to a shell around the model (6 Å by default) because a
+whole-map surface at cryo-EM sizes runs to millions of triangles. Tick *Solid and transparent* for a
+surface instead of a mesh. The line under the controls reports how many atoms lie inside the
+surface at that level, which is the quickest way to choose a level: nearly all of the model inside
+at a sensible contour is what a well-fitted model looks like, and a low figure means the level is
+too high or the map does not match the model.
+
+Two failures are reported rather than drawn. If no atom of the model lies inside the map, the
+model and the map are not in the same frame, and the usual cause is a wrong origin. If the map
+has no variation at all, it is empty or the wrong file. A level that falls in the noise, which
+would produce a shredded surface of hundreds of thousands of fragments, is refused with advice to
+raise it. The surface is drawn from the same grid mapping that the density scoring uses, so what
+you see is what is scored.
+
 Everything is processed locally. No coordinates are transmitted anywhere, which is what
 makes the tool usable on unpublished or patient-derived structures.
 

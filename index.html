@@ -765,6 +765,15 @@ END
           interaction network differs rather than how the coordinates differ.</div>
         <div class="hint" id="trajinfo">DCD, TRR or multi-frame GRO. Contacts then carry an occupancy
           rather than a yes or no.</div>
+        <div class="row" style="margin-top:8px">
+          <button id="btnmapshow" disabled>Show map</button>
+          <button id="btnmaphide" disabled style="flex:0 0 70px">Hide</button>
+        </div>
+        <div class="row">
+          <label class="field"><span>Contour (σ above mean)</span><input type="number" id="maplevel" value="2.0" step="0.5"></label>
+          <label class="field"><span>Shell around model (Å)</span><input type="number" id="mapcarve" value="6" step="1" min="1"></label>
+        </div>
+        <label class="chk"><input type="checkbox" id="mapsolid"> Solid and transparent instead of mesh</label>
         <div class="hint" id="mapinfo">No map loaded. With one, every residue and every contact is
           scored for whether there is density under it.</div>
       </div>
@@ -3512,8 +3521,11 @@ function parseMRC(buffer){
   const axes=[mapc,mapr,maps], starts=[ncstart,nrstart,nsstart];
   const startFor=a=>{ const k=axes.indexOf(a); return k<0?0:starts[k]; };
   const useOrigin = (origin.x||origin.y||origin.z);
-  const org = useOrigin ? origin : {
-    x:startFor(1)*spacing.x, y:startFor(2)*spacing.y, z:startFor(3)*spacing.z };
+  /* Two conventions, never combined. With ORIGIN words set, a voxel sits at
+     origin + index*spacing. With ORIGIN zero, the start indices carry the offset
+     and a voxel sits at (start + index)*spacing. Applying both, as this used to,
+     displaces the map by the start offset and leaves it on nothing. */
+  const org = useOrigin ? origin : {x:0, y:0, z:0};
   const base = useOrigin ? {x:0,y:0,z:0} : {x:0,y:0,z:0};
   let sum=0,sum2=0,dmin=Infinity,dmax=-Infinity;
   for(let i=0;i<n;i++){const v=data[i];sum+=v;sum2+=v*v;if(v<dmin)dmin=v;if(v>dmax)dmax=v;}
@@ -3523,9 +3535,19 @@ function parseMRC(buffer){
   /* world point -> fractional column/row/section indices */
   M.toIndex=p=>{
     const g={1:(p.x-org.x)/spacing.x, 2:(p.y-org.y)/spacing.y, 3:(p.z-org.z)/spacing.z};
-    return {c:g[mapc]-(useOrigin?0:startFor(mapc))-(useOrigin?ncstart:0),
-            r:g[mapr]-(useOrigin?0:startFor(mapr))-(useOrigin?nrstart:0),
-            s:g[maps]-(useOrigin?0:startFor(maps))-(useOrigin?nsstart:0)};
+    return {c:g[mapc]-(useOrigin?0:ncstart),
+            r:g[mapr]-(useOrigin?0:nrstart),
+            s:g[maps]-(useOrigin?0:nsstart)};
+  };
+  /* the inverse: column, row, section index -> position in the model's frame */
+  M.toWorld=(c,r,s)=>{
+    const g=[c+(useOrigin?0:ncstart), r+(useOrigin?0:nrstart), s+(useOrigin?0:nsstart)];
+    const w={x:0,y:0,z:0};
+    [mapc,mapr,maps].forEach((ax,k)=>{
+      const key=ax===1?"x":ax===2?"y":"z";
+      w[key]=org[key]+g[k]*spacing[key];
+    });
+    return w;
   };
   M.at=(c,r,s)=>(c<0||r<0||s<0||c>=nc||r>=nr||s>=ns)?NaN:data[c+nc*(r+nr*s)];
   M.value=p=>{
@@ -4222,10 +4244,84 @@ async function renderViewer(which, reset){
   }
   try{
     drawContacts(which);
+    drawMapContour(v);
     if(reset) v.zoomTo();
     v.render();
   }catch(err){ viewerFailed(err); }
 }
+/* the viewer clears every shape when it redraws, so the cached mesh is added again each time */
+function drawMapContour(v){
+  ST.mapShapes=[];
+  if(!v||!ST.mapShown||!ST.mapMesh||!ST.mapMesh.triangles) return;
+  const m=ST.mapMesh, per=20000;
+  for(let t0=0;t0<m.triangles;t0+=per){
+    const n=Math.min(per,m.triangles-t0);
+    const vertexArr=new Array(n*3), normalArr=new Array(n*3), faceArr=new Array(n*3);
+    for(let k=0;k<n;k++){
+      const tt=t0+k;
+      for(let j=0;j<3;j++){
+        const o=(tt*3+j)*3, i=k*3+j;
+        vertexArr[i]={x:m.positions[o], y:m.positions[o+1], z:m.positions[o+2]};
+        normalArr[i]={x:m.normals[tt*3], y:m.normals[tt*3+1], z:m.normals[tt*3+2]};
+        faceArr[i]=i;
+      }
+    }
+    ST.mapShapes.push(v.addCustom({vertexArr, normalArr, faceArr, color:m.color,
+      alpha:m.solid?0.45:1, wireframe:!m.solid}));
+  }
+}
+$("#btnmapshow").onclick=()=>mapShow().catch(e=>log("Map display: "+e.message,"err"))
+  .finally(()=>busy(null));
+async function mapShow(){
+  if(!ST.map){ log("Load a map first.","warn"); return; }
+  const sig=parseFloat($("#maplevel").value);
+  if(!isFinite(sig)){ log("Give a contour level in units of the map's standard deviation.","warn"); return; }
+  const carve=Math.max(1,+$("#mapcarve").value||6);
+  /* a map with no variation puts every contour level at its mean, so every atom
+     would "lie inside" it; that is an empty or wrong file, not a result */
+  if(!(ST.map.rms>1e-12)){
+    const msg="This map has no variation: every voxel has the same value, so there is nothing to contour. "+
+      "It is empty or the wrong file.";
+    $("#mapinfo").textContent=msg; log(msg,"err"); return;
+  }
+  busy("Contouring\u2026"); await nextFrame();
+  const level=ST.map.mean+sig*ST.map.rms;
+  const atoms=ST.wt?ST.wt.atoms:null;
+  const t0=performance.now();
+  const R=contourMap(ST.map, level, atoms, {carve});
+  const ms=Math.round(performance.now()-t0);
+  const cov=ST.wt?mapCoverage(ST.map, level, ST.wt.atoms):null;
+  const info=$("#mapinfo");
+  if(R.error){
+    info.textContent=R.error+".";
+    log("Map: "+R.error+(/inside this map/.test(R.error)?
+      ". The model and the map are not in the same frame; check the map's origin and start indices.":"."),"err");
+    return;
+  }
+  ST.mapMesh={...R, color:"#5AA9E6", solid:$("#mapsolid").checked};
+  ST.mapShown=true; $("#btnmaphide").disabled=false;
+  let msg=`Contour at ${sig} \u03C3 (${level.toPrecision(3)}): ${R.triangles.toLocaleString()} triangles`+
+    (ST.wt?` within ${carve} \u00C5 of the model`:` over the whole map${R.step>1?`, sampled every ${R.step} voxels`:""}`)+`, ${ms} ms.`;
+  if(cov){
+    msg+=` ${(100*cov.fraction).toFixed(0)}% of atoms lie inside it`+
+      (cov.outside?`, and ${cov.outside} of ${cov.total} are outside the map altogether`:"")+".";
+    if(cov.outside>0.5*cov.total)
+      log("More than half of the atoms lie outside the map. The model and the map probably do not share a frame.","warn");
+    else if(cov.fraction<0.3)
+      log("Few atoms lie inside the surface at this level. Lower the contour, or check that the map matches this model.","warn");
+  }
+  if(!R.triangles) msg+=" Nothing reaches this level; lower it.";
+  info.textContent=msg; log(msg, R.triangles?"ok":"warn");
+  if(!ST.viewer){ log("The 3D view is not available in this browser, so the contour could not be drawn. "+
+    "The numbers above are still valid.","warn"); return; }
+  await renderViewer(ST.shown||"wt", false);
+}
+$("#btnmaphide").onclick=()=>{
+  ST.mapShown=false; $("#btnmaphide").disabled=true;
+  if(ST.viewer) renderViewer(ST.shown||"wt", false);
+};
+
+
 function drawContacts(which){
   const v=ST.viewer; if(!v) return;
   const S = which==="mut"&&ST.mut?ST.mut:ST.wt;
@@ -5892,6 +5988,8 @@ async function loadMap(file){
       `${M.spacing.x.toFixed(2)} Å voxel · mean ${M.mean.toFixed(3)}, rms ${M.rms.toFixed(3)} · ${mb} MB`;
     if(!M.orthogonal) log("The unit cell is not orthogonal; map placement assumes right angles and may be wrong.","warn");
     $("#btndens").disabled=!ST.wt;
+    $("#btnmapshow").disabled=false; $("#btnmaphide").disabled=true;
+    ST.mapMesh=null; ST.mapShown=false; ST.mapShapes=[];
     log(`Map loaded: ${M.nc}×${M.nr}×${M.ns} voxels at ${M.spacing.x.toFixed(2)} Å.`,"ok");
   }catch(err){ log("Could not read the map: "+err.message,"err"); }
   busy(null);
@@ -6351,6 +6449,117 @@ async function hotspotScan(S, chain, cfg, onStep){
   live.sort((a,b)=>b.dBind-a.dBind);
   return {rows, ranked:live, chain, interfaceEnergy:bindW,
     considered:list.length, usable:live.length};
+}
+
+/* ============================================================
+   MAP CONTOUR
+   Reading a map to score density support is not the same as showing it.
+   This draws the surface at a chosen level, carved to a shell around the
+   model, using the same index-to-world mapping the scoring uses, so that
+   what is drawn is exactly what is scored.
+   ============================================================ */
+const MC_TETS=[[0,5,1,6],[0,1,2,6],[0,2,3,6],[0,3,7,6],[0,7,4,6],[0,4,5,6]];
+const MC_COR=[[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,1],[1,0,1],[1,1,1],[0,1,1]];
+/* marching tetrahedra: every cube is cut into six tetrahedra about one diagonal,
+   the same way in every cube, so neighbouring cubes agree on their shared faces
+   and the surface has no cracks */
+function contourMap(M, level, atoms, cfg){
+  cfg=Object.assign({carve:6, maxTriangles:900000, maxVoxels:6e6}, cfg||{});
+  const {nc,nr,ns,data}=M;
+  const w0=M.toWorld(0,0,0);
+  const sub3=(a,b)=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z});
+  const ec=sub3(M.toWorld(1,0,0),w0), er=sub3(M.toWorld(0,1,0),w0), es=sub3(M.toWorld(0,0,1),w0);
+  const lc=Math.hypot(ec.x,ec.y,ec.z), lr=Math.hypot(er.x,er.y,er.z), ls=Math.hypot(es.x,es.y,es.z);
+  const world=(c,r,s)=>[w0.x+c*ec.x+r*er.x+s*es.x, w0.y+c*ec.y+r*er.y+s*es.y, w0.z+c*ec.z+r*er.z+s*es.z];
+  let mask=null, box={c0:0,c1:nc-2,r0:0,r1:nr-2,s0:0,s1:ns-2}, used=0;
+  const pts=(atoms||[]).filter(a=>!a.water&&!a.phantom);
+  if(pts.length){
+    mask=new Uint8Array(nc*nr*ns);
+    let c0=1e9,c1=-1e9,r0=1e9,r1=-1e9,s0=1e9,s1=-1e9;
+    const R2=cfg.carve*cfg.carve;
+    pts.forEach(a=>{
+      const q=M.toIndex(a);
+      if(!isFinite(q.c)||!isFinite(q.r)||!isFinite(q.s)) return;
+      const rc=cfg.carve/lc, rr=cfg.carve/lr, rs=cfg.carve/ls;
+      const ic0=Math.max(0,Math.floor(q.c-rc)), ic1=Math.min(nc-1,Math.ceil(q.c+rc));
+      const ir0=Math.max(0,Math.floor(q.r-rr)), ir1=Math.min(nr-1,Math.ceil(q.r+rr));
+      const is0=Math.max(0,Math.floor(q.s-rs)), is1=Math.min(ns-1,Math.ceil(q.s+rs));
+      if(ic1<ic0||ir1<ir0||is1<is0) return;
+      used++;
+      for(let s3=is0;s3<=is1;s3++)for(let r=ir0;r<=ir1;r++)for(let c=ic0;c<=ic1;c++){
+        const dc=(c-q.c)*lc, dr=(r-q.r)*lr, ds=(s3-q.s)*ls;
+        if(dc*dc+dr*dr+ds*ds<=R2) mask[c+nc*(r+nr*s3)]=1;
+      }
+      c0=Math.min(c0,ic0);c1=Math.max(c1,ic1);r0=Math.min(r0,ir0);r1=Math.max(r1,ir1);
+      s0=Math.min(s0,is0);s1=Math.max(s1,is1);
+    });
+    if(!used) return {triangles:0, positions:new Float32Array(0), normals:new Float32Array(0),
+      level, carve:cfg.carve, step:1, atomsInMap:0, error:"no atom of the model lies inside this map"};
+    box={c0,c1:Math.min(nc-2,c1),r0,r1:Math.min(nr-2,r1),s0,s1:Math.min(ns-2,s1)};
+  }
+  const nvox=(box.c1-box.c0+1)*(box.r1-box.r0+1)*(box.s1-box.s0+1);
+  const st = mask ? 1 : Math.max(1, Math.ceil(Math.cbrt(nvox/cfg.maxVoxels)));
+  const pos=[], nrm=[]; let tri=0;
+  const f=new Float64Array(8);
+  const cornerIdx=(c,r,s3,k)=>(c+st*MC_COR[k][0])+nc*((r+st*MC_COR[k][1])+nr*(s3+st*MC_COR[k][2]));
+  for(let s3=box.s0;s3<=box.s1;s3+=st)for(let r=box.r0;r<=box.r1;r+=st)for(let c=box.c0;c<=box.c1;c+=st){
+    if(c+st>nc-1||r+st>nr-1||s3+st>ns-1) continue;
+    if(mask && !mask[c+nc*(r+nr*s3)]) continue;
+    let above=0;
+    for(let k=0;k<8;k++){ f[k]=data[cornerIdx(c,r,s3,k)]; if(f[k]>=level) above++; }
+    if(above===0||above===8) continue;
+    const cw=k=>world(c+st*MC_COR[k][0], r+st*MC_COR[k][1], s3+st*MC_COR[k][2]);
+    const edge=(a,b)=>{
+      const t=(level-f[a])/(f[b]-f[a]);
+      return world(c+st*(MC_COR[a][0]+t*(MC_COR[b][0]-MC_COR[a][0])),
+                   r+st*(MC_COR[a][1]+t*(MC_COR[b][1]-MC_COR[a][1])),
+                   s3+st*(MC_COR[a][2]+t*(MC_COR[b][2]-MC_COR[a][2])));
+    };
+    for(const T of MC_TETS){
+      const ins=T.filter(k=>f[k]>=level), out=T.filter(k=>f[k]<level);
+      if(ins.length===0||ins.length===4) continue;
+      const tris=[];
+      if(ins.length===1) tris.push([edge(ins[0],out[0]),edge(ins[0],out[1]),edge(ins[0],out[2])]);
+      else if(ins.length===3) tris.push([edge(out[0],ins[0]),edge(out[0],ins[1]),edge(out[0],ins[2])]);
+      else {
+        const q=[edge(ins[0],out[0]),edge(ins[0],out[1]),edge(ins[1],out[1]),edge(ins[1],out[0])];
+        tris.push([q[0],q[1],q[2]],[q[0],q[2],q[3]]);
+      }
+      /* orient every triangle so its normal points from high density to low */
+      const avg=list=>{ const a=[0,0,0]; list.forEach(k=>{const w=cw(k); a[0]+=w[0];a[1]+=w[1];a[2]+=w[2];});
+        return a.map(v=>v/list.length); };
+      const ci=avg(ins), co=avg(out), dir=[co[0]-ci[0],co[1]-ci[1],co[2]-ci[2]];
+      for(const [p0,p1,p2] of tris){
+        let u=[p1[0]-p0[0],p1[1]-p0[1],p1[2]-p0[2]], w=[p2[0]-p0[0],p2[1]-p0[1],p2[2]-p0[2]];
+        let n=[u[1]*w[2]-u[2]*w[1], u[2]*w[0]-u[0]*w[2], u[0]*w[1]-u[1]*w[0]];
+        const len=Math.hypot(n[0],n[1],n[2]);
+        if(len<1e-12) continue;
+        n=n.map(v=>v/len);
+        let a=p0,b=p1,cc=p2;
+        if(n[0]*dir[0]+n[1]*dir[1]+n[2]*dir[2]<0){ b=p2; cc=p1; n=n.map(v=>-v); }
+        pos.push(a[0],a[1],a[2],b[0],b[1],b[2],cc[0],cc[1],cc[2]);
+        nrm.push(n[0],n[1],n[2]);
+        tri++;
+      }
+      if(tri>cfg.maxTriangles) return {triangles:tri, positions:new Float32Array(0),
+        normals:new Float32Array(0), level, carve:cfg.carve, step:st, atomsInMap:used,
+        error:`that level gives more than ${cfg.maxTriangles.toLocaleString()} triangles, which is noise rather than a molecule; raise the level`};
+    }
+  }
+  return {triangles:tri, positions:Float32Array.from(pos), normals:Float32Array.from(nrm),
+    level, carve:cfg.carve, step:st, atomsInMap:used};
+}
+/* how many atoms sit inside the surface at this level, and how many are not even
+   inside the map, which is the signature of a model and a map that do not share a frame */
+function mapCoverage(M, level, atoms){
+  let total=0, inside=0, outside=0;
+  (atoms||[]).forEach(a=>{
+    if(a.water||a.phantom) return;
+    total++;
+    const v=M.value(a);
+    if(!isFinite(v)) outside++; else if(v>=level) inside++;
+  });
+  return {total, inside, outside, fraction: total?inside/total:NaN};
 }
 
 /* ============================================================
@@ -8720,12 +8929,18 @@ function afmAtoms(){
   const level=parseFloat($("#afmlevel").value);
   if(ST.map&&isFinite(level)){
     /* a density map, sampled above a contour, stands in for the atoms */
-    const pts=[];
-    const M=ST.map;
-    for(let i=0;i<M.nx;i++)for(let j=0;j<M.ny;j++)for(let k=0;k<M.nz;k++)
-      if(M.value(i,j,k)>=level){ const c=M.coord(i,j,k); pts.push({...c, elem:"C", __map:true}); }
+    const M=ST.map; let stride=1, pts=[];
+    for(;;){
+      pts=[];
+      for(let s3=0;s3<M.ns;s3+=stride)for(let r=0;r<M.nr;r+=stride)for(let c=0;c<M.nc;c+=stride){
+        if(M.data[c+M.nc*(r+M.nr*s3)]>=level){ const w=M.toWorld(c,r,s3); pts.push({...w, elem:"C", __map:true}); }
+      }
+      if(pts.length<=300000) break;
+      stride++;                       /* far more points than the search can use */
+    }
     if(!pts.length) throw new Error("no density above that level");
-    return {atoms:pts, source:`density above ${level}`, radius:M.spacing*0.75};
+    const vox=(M.spacing.x+M.spacing.y+M.spacing.z)/3*stride;
+    return {atoms:pts, source:`density above ${level}`, radius:vox*0.75};
   }
   if(!ST.wt) throw new Error("load a structure, or a map and a contour level");
   return {atoms:ST.wt.atoms.filter(a=>!a.water&&!a.phantom), source:ST.name, radius:null};
