@@ -774,6 +774,7 @@ END
           <label class="field"><span>Shell around model (Å)</span><input type="number" id="mapcarve" value="6" step="1" min="1"></label>
         </div>
         <label class="chk"><input type="checkbox" id="mapsolid"> Solid and transparent instead of mesh</label>
+        <label class="chk"><input type="checkbox" id="mapdust" checked> Hide small isolated specks</label>
         <div class="hint" id="mapinfo">No map loaded. With one, every residue and every contact is
           scored for whether there is density under it.</div>
       </div>
@@ -4304,20 +4305,28 @@ async function mapShow(){
   const level=ST.map.mean+sig*ST.map.rms;
   const atoms=ST.wt?ST.wt.atoms:null;
   const t0=performance.now();
-  const R=contourMap(ST.map, level, atoms, {carve});
+  const R=contourMap(ST.map, level, atoms, {carve, dust:$("#mapdust").checked});
   const ms=Math.round(performance.now()-t0);
   const cov=ST.wt?mapCoverage(ST.map, level, ST.wt.atoms):null;
   const info=$("#mapinfo");
   if(R.error){
-    info.textContent=R.error+".";
-    log("Map: "+R.error+(/inside this map/.test(R.error)?
-      ". The model and the map are not in the same frame; check the map's origin and start indices.":"."),"err");
+    const advice = /inside this map/.test(R.error)
+      ? ". The model and the map are not in the same frame; check the map's origin and start indices."
+      : /noise/.test(R.error)
+        ? (ST.wt ? "." : ". Load your model as well and the map is drawn only in a shell around it, which "+
+            "removes most of the noise; otherwise raise the level, or keep 'Hide small isolated specks' ticked.")
+        : ".";
+    info.textContent=R.error+advice;
+    log("Map: "+R.error+advice,"err");
     return;
   }
   ST.mapMesh={...R, color:"#5AA9E6", solid:$("#mapsolid").checked};
   ST.mapShown=true; $("#btnmaphide").disabled=false;
-  let msg=`Contour at ${sig} \u03C3 (${level.toPrecision(3)}): ${R.triangles.toLocaleString()} triangles`+
-    (ST.wt?` within ${carve} \u00C5 of the model`:` over the whole map${R.step>1?`, sampled every ${R.step} voxels`:""}`)+`, ${ms} ms.`;
+  let msg=`Contour at ${sig} \u03C3 (${level.toPrecision(3)}): ${R.triangles.toLocaleString("en-US")} triangles`+
+    (ST.wt?` within ${carve} \u00C5 of the model`:` over the whole map`)+
+    (R.step>1?`, sampled every ${R.step} voxels because the map is large`:"")+`, ${ms} ms.`;
+  if(R.dust && R.dust.removed>0)
+    msg+=` ${R.dust.removed.toLocaleString("en-US")} small isolated specks hidden.`;
   if(cov){
     msg+=` ${(100*cov.fraction).toFixed(0)}% of atoms lie inside it`+
       (cov.outside?`, and ${cov.outside} of ${cov.total} are outside the map altogether`:"")+".";
@@ -6480,7 +6489,8 @@ const MC_COR=[[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,1],[1,0,1],[1,1,1],[0,1,1]];
    the same way in every cube, so neighbouring cubes agree on their shared faces
    and the surface has no cracks */
 function contourMap(M, level, atoms, cfg){
-  cfg=Object.assign({carve:6, maxTriangles:900000, maxVoxels:6e6}, cfg||{});
+  cfg=Object.assign({carve:6, maxTriangles:900000, maxVoxels:12e6, dust:true,
+    dustFraction:0.02, minPiece:6}, cfg||{});
   const {nc,nr,ns,data}=M;
   const w0=M.toWorld(0,0,0);
   const sub3=(a,b)=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z});
@@ -6514,17 +6524,72 @@ function contourMap(M, level, atoms, cfg){
     box={c0,c1:Math.min(nc-2,c1),r0,r1:Math.min(nr-2,r1),s0,s1:Math.min(ns-2,s1)};
   }
   const nvox=(box.c1-box.c0+1)*(box.r1-box.r0+1)*(box.s1-box.s0+1);
-  const st = mask ? 1 : Math.max(1, Math.ceil(Math.cbrt(nvox/cfg.maxVoxels)));
+  /* the working lattice is kept to a size a browser can hold, coarser for very large maps */
+  const st = Math.max(1, Math.ceil(Math.cbrt(nvox/cfg.maxVoxels)));
+  const cEnd=Math.min(box.c1+st,nc-1), rEnd=Math.min(box.r1+st,nr-1), sEnd=Math.min(box.s1+st,ns-1);
+  const Lc=Math.floor((cEnd-box.c0)/st)+1, Lr=Math.floor((rEnd-box.r0)/st)+1, Ls=Math.floor((sEnd-box.s0)/st)+1;
+  const LcLr=Lc*Lr;
+
+  /* Hide dust. Noise above the level forms many tiny separate pieces, while the
+     molecule is one large connected body. Label the connected pieces of the voxels
+     above the level, keep those that are a worthwhile fraction of the largest, and
+     draw only where a kept piece is. */
+  let state=null, dustInfo=null;
+  if(cfg.dust){
+    state=new Uint8Array(LcLr*Ls);           /* 0 off, 1 on, 2 on and dropped, 3 on and kept */
+    let onCount=0;
+    for(let k=0;k<Ls;k++)for(let j=0;j<Lr;j++)for(let i=0;i<Lc;i++){
+      const idx=(box.c0+i*st)+nc*((box.r0+j*st)+nr*(box.s0+k*st));
+      if(data[idx]>=level && (!mask||mask[idx])){ state[i+Lc*(j+Lr*k)]=1; onCount++; }
+    }
+    if(onCount){
+      const queue=new Int32Array(onCount), starts=[], sizes=[];
+      let qn=0;
+      for(let li=0;li<state.length;li++){
+        if(state[li]!==1) continue;
+        const start=qn; state[li]=2; queue[qn++]=li; let head=start;
+        while(head<qn){
+          const cur=queue[head++];
+          const i=cur%Lc, j=Math.floor(cur/Lc)%Lr, k=Math.floor(cur/LcLr);
+          if(i>0    && state[cur-1]===1)    { state[cur-1]=2;    queue[qn++]=cur-1; }
+          if(i<Lc-1 && state[cur+1]===1)    { state[cur+1]=2;    queue[qn++]=cur+1; }
+          if(j>0    && state[cur-Lc]===1)   { state[cur-Lc]=2;   queue[qn++]=cur-Lc; }
+          if(j<Lr-1 && state[cur+Lc]===1)   { state[cur+Lc]=2;   queue[qn++]=cur+Lc; }
+          if(k>0    && state[cur-LcLr]===1) { state[cur-LcLr]=2; queue[qn++]=cur-LcLr; }
+          if(k<Ls-1 && state[cur+LcLr]===1) { state[cur+LcLr]=2; queue[qn++]=cur+LcLr; }
+        }
+        starts.push(start); sizes.push(qn-start);
+      }
+      let largest=0; sizes.forEach(n=>{ if(n>largest) largest=n; });
+      const thr=Math.max(cfg.minPiece, cfg.dustFraction*largest);
+      let kept=0, removed=0;
+      sizes.forEach((n,m)=>{
+        if(n>=thr){ for(let q=starts[m];q<starts[m]+n;q++) state[queue[q]]=3; kept++; }
+        else removed++;
+      });
+      dustInfo={pieces:sizes.length, kept, removed, largest};
+    } else dustInfo={pieces:0, kept:0, removed:0, largest:0};
+  }
+
   const pos=[], nrm=[]; let tri=0;
   const f=new Float64Array(8);
   const cornerIdx=(c,r,s3,k)=>(c+st*MC_COR[k][0])+nc*((r+st*MC_COR[k][1])+nr*(s3+st*MC_COR[k][2]));
-  for(let s3=box.s0;s3<=box.s1;s3+=st)for(let r=box.r0;r<=box.r1;r+=st)for(let c=box.c0;c<=box.c1;c+=st){
+  for(let k=0,s3=box.s0; s3<=box.s1; k++, s3+=st)
+  for(let j=0,r=box.r0; r<=box.r1; j++, r+=st)
+  for(let i=0,c=box.c0; c<=box.c1; i++, c+=st){
     if(c+st>nc-1||r+st>nr-1||s3+st>ns-1) continue;
     if(mask && !mask[c+nc*(r+nr*s3)]) continue;
     let above=0;
-    for(let k=0;k<8;k++){ f[k]=data[cornerIdx(c,r,s3,k)]; if(f[k]>=level) above++; }
+    for(let q=0;q<8;q++){ f[q]=data[cornerIdx(c,r,s3,q)]; if(f[q]>=level) above++; }
     if(above===0||above===8) continue;
-    const cw=k=>world(c+st*MC_COR[k][0], r+st*MC_COR[k][1], s3+st*MC_COR[k][2]);
+    if(state){
+      let ok=false;
+      for(let q=0;q<8;q++){
+        if(state[(i+MC_COR[q][0])+Lc*((j+MC_COR[q][1])+Lr*(k+MC_COR[q][2]))]===3){ ok=true; break; }
+      }
+      if(!ok) continue;
+    }
+    const cw=q=>world(c+st*MC_COR[q][0], r+st*MC_COR[q][1], s3+st*MC_COR[q][2]);
     const edge=(a,b)=>{
       const t=(level-f[a])/(f[b]-f[a]);
       return world(c+st*(MC_COR[a][0]+t*(MC_COR[b][0]-MC_COR[a][0])),
@@ -6532,21 +6597,20 @@ function contourMap(M, level, atoms, cfg){
                    s3+st*(MC_COR[a][2]+t*(MC_COR[b][2]-MC_COR[a][2])));
     };
     for(const T of MC_TETS){
-      const ins=T.filter(k=>f[k]>=level), out=T.filter(k=>f[k]<level);
+      const ins=T.filter(q=>f[q]>=level), out=T.filter(q=>f[q]<level);
       if(ins.length===0||ins.length===4) continue;
       const tris=[];
       if(ins.length===1) tris.push([edge(ins[0],out[0]),edge(ins[0],out[1]),edge(ins[0],out[2])]);
       else if(ins.length===3) tris.push([edge(out[0],ins[0]),edge(out[0],ins[1]),edge(out[0],ins[2])]);
       else {
-        const q=[edge(ins[0],out[0]),edge(ins[0],out[1]),edge(ins[1],out[1]),edge(ins[1],out[0])];
-        tris.push([q[0],q[1],q[2]],[q[0],q[2],q[3]]);
+        const qd=[edge(ins[0],out[0]),edge(ins[0],out[1]),edge(ins[1],out[1]),edge(ins[1],out[0])];
+        tris.push([qd[0],qd[1],qd[2]],[qd[0],qd[2],qd[3]]);
       }
-      /* orient every triangle so its normal points from high density to low */
-      const avg=list=>{ const a=[0,0,0]; list.forEach(k=>{const w=cw(k); a[0]+=w[0];a[1]+=w[1];a[2]+=w[2];});
+      const avg=list=>{ const a=[0,0,0]; list.forEach(q=>{const w=cw(q); a[0]+=w[0];a[1]+=w[1];a[2]+=w[2];});
         return a.map(v=>v/list.length); };
       const ci=avg(ins), co=avg(out), dir=[co[0]-ci[0],co[1]-ci[1],co[2]-ci[2]];
       for(const [p0,p1,p2] of tris){
-        let u=[p1[0]-p0[0],p1[1]-p0[1],p1[2]-p0[2]], w=[p2[0]-p0[0],p2[1]-p0[1],p2[2]-p0[2]];
+        const u=[p1[0]-p0[0],p1[1]-p0[1],p1[2]-p0[2]], w=[p2[0]-p0[0],p2[1]-p0[1],p2[2]-p0[2]];
         let n=[u[1]*w[2]-u[2]*w[1], u[2]*w[0]-u[0]*w[2], u[0]*w[1]-u[1]*w[0]];
         const len=Math.hypot(n[0],n[1],n[2]);
         if(len<1e-12) continue;
@@ -6558,17 +6622,17 @@ function contourMap(M, level, atoms, cfg){
         tri++;
       }
       if(tri>cfg.maxTriangles) return {triangles:tri, positions:new Float32Array(0),
-        normals:new Float32Array(0), level, carve:cfg.carve, step:st, atomsInMap:used,
-        error:`that level gives more than ${cfg.maxTriangles.toLocaleString()} triangles, which is noise rather than a molecule; raise the level`};
+        normals:new Float32Array(0), level, carve:cfg.carve, step:st, atomsInMap:used, dust:dustInfo,
+        error:`that level gives more than ${cfg.maxTriangles.toLocaleString("en-US")} triangles, which is noise rather than a molecule; raise the level`};
     }
   }
   const bounds={min:[Infinity,Infinity,Infinity], max:[-Infinity,-Infinity,-Infinity]};
-  for(let i=0;i<pos.length;i+=3) for(let k=0;k<3;k++){
-    if(pos[i+k]<bounds.min[k]) bounds.min[k]=pos[i+k];
-    if(pos[i+k]>bounds.max[k]) bounds.max[k]=pos[i+k];
+  for(let i=0;i<pos.length;i+=3) for(let q=0;q<3;q++){
+    if(pos[i+q]<bounds.min[q]) bounds.min[q]=pos[i+q];
+    if(pos[i+q]>bounds.max[q]) bounds.max[q]=pos[i+q];
   }
   return {triangles:tri, positions:Float32Array.from(pos), normals:Float32Array.from(nrm),
-    level, carve:cfg.carve, step:st, atomsInMap:used, bounds};
+    level, carve:cfg.carve, step:st, atomsInMap:used, bounds, dust:dustInfo};
 }
 /* how many atoms sit inside the surface at this level, and how many are not even
    inside the map, which is the signature of a model and a map that do not share a frame */

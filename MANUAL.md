@@ -43,6 +43,16 @@ surface at that level, which is the quickest way to choose a level: nearly all o
 at a sensible contour is what a well-fitted model looks like, and a low figure means the level is
 too high or the map does not match the model.
 
+With no structure loaded the whole map is contoured, and a raw cryo-EM map is mostly noise, which
+at 2 σ breaks into tens of thousands of small separate specks. **Hide small isolated specks**, on
+by default, labels the connected pieces of the surface and draws only those that are a worthwhile
+fraction of the largest, so the molecule is shown and the dust is not; the line under the controls
+says how many specks were hidden. Noise that physically touches the molecule is part of its
+connected piece and stays, so a very noisy map still looks fuzzy at the edge. Loading your model as
+well restricts the drawing to a shell around it, which removes most of the noise before anything
+else is done. Very large maps are sampled every second or third voxel to keep the browser
+responsive, and the line says so.
+
 Two failures are reported rather than drawn. If no atom of the model lies inside the map, the
 model and the map are not in the same frame, and the usual cause is a wrong origin. If the map
 has no variation at all, it is empty or the wrong file. A level that falls in the noise, which
