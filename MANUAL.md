@@ -60,6 +60,36 @@ would produce a shredded surface of hundreds of thousands of fragments, is refus
 raise it. The surface is drawn from the same grid mapping that the density scoring uses, so what
 you see is what is scored.
 
+**What the model leaves unexplained.** *Find unexplained density* simulates the model's density on
+the map's own grid, with the same kernel the density scoring uses, scales it to the map by least
+squares near the atoms, and subtracts it. Pieces of what remains are listed and drawn: green where
+the map has density no atom accounts for, red where the model has nothing behind it. Each piece is
+given with its volume, its peak height and the residues beside it, and is flagged when it sits at a
+glycosylation sequon. By default the tool finds the resolution at which the model best matches the
+map instead of relying on the value you enter, because a wrong resolution leaves halos round every
+atom. It cannot say what unexplained density is: a glycan, a ligand, an ion, a misplaced side chain,
+an unmodelled loop and a partner subunit all look alike here.
+
+**Q-scores.** *Score density support* now also reports the Q-score of every atom: how well it sits
+at the centre of its own density peak, from map values sampled out to 2 Å and correlated against a
+Gaussian of width 0.6 Å, after Pintilie and colleagues. It is shown per residue beside the
+correlation, with the value expected for a well-fitted model at the resolution entered.
+
+**Saving the map around a model.** *Save map around model (MRC)* writes the region of the map within a
+margin of the model as an MRC2014 file on standard x, y, z axes, with its position in the header, so that
+ChimeraX, Coot and other programs place it on the model. Values are copied from the map's own grid points,
+nothing is interpolated, and a map whose axes are stored permuted is written in standard order. Tick *Set
+density beyond the margin from every atom to zero* for the density around the model alone, which is what a
+figure usually needs.
+
+**Fitting.** *Fit model into map* moves the model as a rigid body to where the map density at its
+atoms is highest, first on a smoothed map and then on the map itself. It refines a placement that
+is roughly right and cannot find one from nowhere. For a predicted model with its PAE file loaded,
+*Fit each domain separately* takes the domains from the predicted aligned error, fits each on its
+own, and reports the peptide bonds between them, since a domain fitted alone can pull away from
+its neighbour. The loaded coordinates change only when you press *Apply*; *Save* writes the fitted
+model as PDB.
+
 Everything is processed locally. No coordinates are transmitted anywhere, which is what
 makes the tool usable on unpublished or patient-derived structures.
 
@@ -415,6 +445,64 @@ give similar topographs at this resolution, while disagreement in height or foot
 strong evidence that something is wrong. Measured heights are systematically low because
 the tip presses into the molecule, by an amount no calculation here can supply.
 
+
+**Fitting an AFM image against a cryo-EM map.** With a map loaded, enter a contour level in *From map at*
+and the orientation fit uses the map's envelope above that level instead of the model. The result is how the
+density must lie on the surface to reproduce the image: which face of the cryo-EM density was facing the tip,
+and, in the difference panel, where the measured surface and the density disagree. The contour level decides
+the envelope's size and so its simulated height; choose it as you would for display, and expect measured
+heights to sit somewhat below the simulated ones because the tip presses into the molecule. As with a model,
+read how many orientations fit about as well as the best: in testing, the same image fitted with the atomic
+model scored well in an orientation turned over relative to the true one.
+
+**Preparing a measured image.** A raw topograph carries the scanner's tilt, an offset that differs from
+one scan line to the next, and the odd spike, and all three pass straight into a fit unless removed.
+On loading, spikes are replaced by the median of their neighbourhood; the background is fitted, as an
+offset, a plane or a second-order surface, together with one offset per scan line, using only pixels
+classed as substrate; and the substrate is set to zero at its median, not its lowest point, which one
+spike below the surface would otherwise decide. The class is seeded from the lowest pixels of every
+segment of every scan line, so that neither a tilt nor a line offset can leave part of the image
+without substrate, and re-estimated until it settles. What was done is reported: spikes removed, tilt,
+the spread of line offsets, and the substrate roughness before and after. With too little bare
+substrate for a curved background, the order is lowered and the reason given. Say whether scan lines
+run along rows or columns of the file, since that decides which offsets are corrected.
+
+**How blunt was the tip?** *Bound the tip radius from the image* uses the fact that an image can never show
+a feature sharper than the tip that traced it: around every summit the image falls by no more than the tip
+rises, so the image puts an upper limit on the tip's radius. It is a bound, not an estimate. It is close to the
+truth only when the surface has features sharper than the tip, and it assumes the tip is a sphere joined to a
+cone of the half-angle set in the panel. Noise is allowed for, so more noise loosens the bound without breaking
+it. If the tip radius set in the panel is blunter than the image allows, the tool says so, because simulations
+and fits made with that tip cannot reproduce what was measured.
+
+**Flexible fitting.** After a rigid orientation fit, *Flexible fit along normal modes* deforms the model
+along the softest motions of an anisotropic network, springs between Cα atoms, to better match the measured
+image. Unlike the Gaussian network of panel 12, this model gives the direction of each motion, which a shape fit
+needs. Its modes were checked against a full eigendecomposition of the same matrix and agree to eleven
+significant figures. A penalty favours soft motions over stiff ones, and any deformation that changes a
+consecutive Cα spacing by more than the strain limit is refused, because linear modes stretch the chain at large
+amplitudes. Large proteins are coarse-grained to at most 400 beads. A height image is blind to some motions, so
+different combinations of modes can explain the same image: the result is one deformation consistent with the
+image, not a measurement of how the molecule moved. Test it against images not used in the fit before drawing a
+conclusion. Save the deformed model as PDB with the button under the results.
+
+**Comparing candidate structures.** Load several candidate structures and several images, and each
+structure is fitted to each image with the same full orientation search a single fit uses. A coarser
+search would be faster and wrong: a candidate whose true orientation is missed scores low and loses to
+a wrong structure, and the ranking then looks confident. Structures are ranked by how many images they
+win; an image on which the two best structures score within 0.05 of each other prefers neither and is
+counted as a tie. A ranking says which candidate the images favour among those supplied. It cannot say
+that any of them is right.
+
+A long comparison can run for hours. Progress is saved in the browser as each fit finishes, so if the page
+is closed, reloaded or stopped with *Stop after the current fit*, choosing the same files and settings and
+running again resumes it without repeating anything; a changed setting starts afresh rather than mixing
+results. The run continues when its tab is not in front, but the computer must stay awake: the page asks
+the browser to keep the screen on, and shows a notification when it finishes. It cannot send email itself,
+because nothing leaves your computer; *Write an email with the summary* opens your mail program with the
+summary written in, and the CSV must be attached by hand. For hundreds or thousands of structures use the
+command-line runner instead, which spreads the work over many processor cores and can email you itself:
+see the validation package's README.
 ---
 
 ## 15 · Structural dendrogram
@@ -464,6 +552,12 @@ proposed to suit the residue rather than defaulting to alanine throughout: charg
 for a salt bridge, tryptophan to phenylalanine rather than to alanine, tyrosine to
 phenylalanine to separate hydrogen bonding from stacking. The leading candidates can then be
 measured by the alchemical binding calculation.
+
+The structural cost uses the empirical score of the mutation panel, with solvent accessibility
+taken over the residues within 15 Å of the site; it is the same rigid substitution as the
+interface cost, not a relaxed or sampled one. (Before version 1.1.0 this column was empty and
+every candidate carried a "could not be modelled" caution, because the check failed; the
+interface ranking was not affected.)
 
 Read the two costs together. A large interface cost with a small structural cost is a clean
 experiment; both large may simply misfold, and a binding assay would then report a loss that

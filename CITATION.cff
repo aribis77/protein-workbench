@@ -17,16 +17,20 @@ abstract: >-
   carries the evidence supporting it: real-space correlation against an experimental
   map, occupancy across an ensemble or trajectory, and predicted aligned error for
   predicted structures. That evidence is propagated into the downstream network,
-  scanning and free energy results. Runs entirely client-side with no installation
-  and no transmission of coordinates.
+  scanning and free energy results. It also scores, fits and inspects models in
+  cryo-EM maps, and fits structures and maps to atomic force microscopy topographs.
+  Runs entirely client-side with no installation and no transmission of coordinates.
 keywords:
   - structural biology
   - protein interaction networks
   - free energy calculation
   - cryo-EM validation
+  - cryo-EM model fitting
+  - atomic force microscopy
+  - binding hotspots
   - AlphaFold confidence
   - transglutaminase crosslinking
 license: MIT
 doi: "10.5281/zenodo.23021531"
-version: 1.0.1
-date-released: "2026-09-28"
+version: 1.1.0
+date-released: "2026-10-07"

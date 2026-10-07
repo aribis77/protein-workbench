@@ -775,6 +775,29 @@ END
         </div>
         <label class="chk"><input type="checkbox" id="mapsolid"> Solid and transparent instead of mesh</label>
         <label class="chk"><input type="checkbox" id="mapdust" checked> Hide small isolated specks</label>
+        <div class="row" style="margin-top:8px">
+          <button id="btnmapexport" disabled>Save map around model (MRC)</button>
+          <label class="field" style="flex:0 0 90px"><span>Margin (Å)</span><input type="number" id="mapexpmargin" value="5" step="1" min="1"></label>
+        </div>
+        <label class="chk"><input type="checkbox" id="mapzone"> Set density beyond the margin from every atom to zero</label>
+        <div class="row" style="margin-top:8px">
+          <button id="btnunexpl" disabled>Find unexplained density</button>
+        </div>
+        <div class="row">
+          <label class="field"><span>Difference level (σ)</span><input type="number" id="unexlevel" value="3" step="0.5" min="1"></label>
+          <label class="field"><span>Smallest piece (Å³)</span><input type="number" id="unexmin" value="30" step="10" min="5"></label>
+        </div>
+        <label class="chk"><input type="checkbox" id="unexauto" checked> Find the resolution that best matches the map</label>
+        <label class="chk"><input type="checkbox" id="unexneg" checked> Also show model with no density behind it</label>
+        <div class="row" style="margin-top:8px">
+          <button id="btnfit" disabled>Fit model into map</button>
+        </div>
+        <label class="chk"><input type="checkbox" id="fitdomains"> Fit each domain separately (needs a PAE file)</label>
+        <div class="row">
+          <label class="field"><span>Domain PAE cut (Å)</span><input type="number" id="fitpaecut" value="10" step="1" min="2"></label>
+          <label class="field"><span>Smallest domain</span><input type="number" id="fitmindom" value="25" step="5" min="5"></label>
+        </div>
+        <div class="hint">Refines a placement that is roughly right; it cannot find one from nowhere.</div>
         <div class="hint" id="mapinfo">No map loaded. With one, every residue and every contact is
           scored for whether there is density under it.</div>
       </div>
@@ -974,7 +997,33 @@ END
           <label class="field"><span>Image pixel (Å)</span><input type="number" id="afmexppixel" value="10" step="1"></label>
           <label class="field"><span>Height unit (Å)</span><input type="number" id="afmunit" value="1" step="0.1"></label>
         </div>
+        <div class="row">
+          <label class="field"><span>Background</span><select id="afmplane">
+            <option value="0">offset only</option><option value="1" selected>plane</option><option value="2">second order</option></select></label>
+          <label class="field"><span>Scan lines run along</span><select id="afmscan">
+            <option value="rows" selected>rows</option><option value="columns">columns</option></select></label>
+        </div>
+        <label class="chk"><input type="checkbox" id="afmlines" checked> Flatten scan lines</label>
+        <label class="chk"><input type="checkbox" id="afmspikes" checked> Remove spikes</label>
         <button id="btnafmfit" disabled>Fit the orientation</button>
+        <button id="btnafmtip" disabled style="margin-top:6px">Bound the tip radius from the image</button>
+        <div class="row" style="margin-top:6px">
+          <button id="btnafmflex" disabled>Flexible fit along normal modes</button>
+        </div>
+        <div class="row">
+          <label class="field"><span>Modes</span><input type="number" id="afmmodes" value="6" min="1" max="12" step="1"></label>
+          <label class="field"><span>Strain limit (Å)</span><input type="number" id="afmstrain" value="0.6" min="0.1" step="0.1"></label>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="btnafmcmpS">Candidate structures…</button>
+          <button id="btnafmcmpI">Images…</button>
+        </div>
+        <input type="file" id="afmcmpstructs" accept=".pdb,.cif,.ent,.txt" multiple style="display:none">
+        <input type="file" id="afmcmpimgs" accept=".txt,.csv,.dat,.asc,.tsv" multiple style="display:none">
+        <button id="btnafmcmp" disabled>Compare structures against images</button>
+        <button id="btnafmcmpstop" style="display:none;margin-top:6px">Stop after the current fit</button>
+        <div class="hint">A long comparison can run for hours: progress is saved as each fit finishes, and choosing
+          the same files and settings again resumes it. Keep the computer awake.</div>
         <div class="hint">Simulates what a tip of this size would trace over the molecule, and searches
           for the orientation that reproduces a measured topograph.</div>
       </div>
@@ -1156,6 +1205,8 @@ END
         <button class="tab" data-pane="p-compare">Compare</button>
         <button class="tab" data-pane="p-dynamics">Dynamics</button>
         <button class="tab" data-pane="p-density">Density</button>
+        <button class="tab" data-pane="p-unexpl">Unexplained</button>
+        <button class="tab" data-pane="p-fit">Fit</button>
         <button class="tab" data-pane="p-xlink">Crosslinks</button>
         <button class="tab" data-pane="p-network">Network</button>
         <button class="tab" data-pane="p-scan">Scan</button>
@@ -1188,6 +1239,8 @@ END
       <div class="pane" id="p-compare"><p class="sub">Load a second structure — an apo form, another state, a related mutant — to see what actually rearranged.</p></div>
       <div class="pane" id="p-dynamics"><p class="sub">Load a trajectory to see which contacts persist, which flicker, and which parts of the structure move.</p></div>
       <div class="pane" id="p-density"><p class="sub">Load a map to separate what is seen from what is modelled.</p></div>
+      <div class="pane" id="p-unexpl"><p class="sub">Load a structure and a map, then find density the model does not explain.</p></div>
+      <div class="pane" id="p-fit"><p class="sub">Load a structure and a map, then fit the model into it.</p></div>
       <div class="pane" id="p-xlink"><p class="sub">Screen every Gln–Lys pair for the geometry an isopeptide bond needs, or check a measured crosslink list against the structure.</p></div>
       <div class="pane" id="p-network"><p class="sub">Treat the contact map as a weighted graph: which residues carry the traffic, which ones hold it together, and how a mutation rewires it.</p></div>
       <div class="pane" id="p-scan"><p class="sub">Every substitution at one site, or an alanine scan across an interface.</p></div>
@@ -1616,7 +1669,90 @@ function buildStructure(parsed){
   const chains=[...new Set(atoms.map(a=>a.chain))].sort();
   const S={atoms,residues,rmap,chains,ssbonds:parsed.ssbonds,links:parsed.links};
   S.get=(r,n)=>{const i=r.atoms.find(k=>atoms[k].name===n);return i===undefined?null:atoms[i];};
+  linkExclusions(S);
   return S;
+}
+/* Covalent links between residues other than the ordinary peptide bond: disulfides,
+   isopeptide crosslinks, phosphodiester bonds and other organic links. Atoms joined
+   by such a bond, and their neighbours up to three bonds apart, must not be scored as
+   a non-bonded pair; a disulfide sulfur pair at 2.04 A scored as a van der Waals
+   clash is worth tens of kcal/mol of spurious repulsion. Each atom carries the set of
+   atoms it is excluded from, and bondExcluded consults it.
+   Two things are deliberately left out. Metals keep their non-bonded treatment, as
+   before. And residues sharing a chain and number but differing in insertion code are
+   never linked here, because the alchemical calculation builds its ghost residue that
+   way and handles that bond itself. */
+const LINK_COV={C:0.76,N:0.71,O:0.66,S:1.05,P:1.07,SE:1.20};
+function linkExclusions(S){
+  const atoms=S.atoms;
+  atoms.forEach(a=>{ if(a.xex) delete a.xex; });
+  const real=atoms.filter(a=>!a.water&&!a.phantom&&LINK_COV[a.elem]);
+  if(real.length<2) return 0;
+  const bonded=(a,b)=>dist(a,b)<LINK_COV[a.elem]+LINK_COV[b.elem]+0.45;
+  const nbCache=new Map();
+  const neighbours=i=>{
+    if(nbCache.has(i)) return nbCache.get(i);
+    const a=atoms[i], r=S.residues[a.ridx];
+    const out=r.atoms.filter(j=>j!==i && !atoms[j].phantom && LINK_COV[atoms[j].elem] && bonded(a,atoms[j]));
+    nbCache.set(i,out); return out;
+  };
+  const exclude=(i,j)=>{
+    if(i===j) return;
+    (atoms[i].xex||(atoms[i].xex=new Set())).add(j);
+    (atoms[j].xex||(atoms[j].xex=new Set())).add(i);
+  };
+  /* Distance alone cannot tell a bond from a severe clash, and a clash is exactly what
+     the energy should expose, not excuse. So a pair at bonding distance counts as a link
+     only if it is a recognised chemical linkage, or the file declares it in a LINK record. */
+  const declared=new Set();
+  (S.links||[]).forEach(L=>{
+    declared.add([L.c1,L.i1,L.n1,L.c2,L.i2,L.n2].join("|"));
+    declared.add([L.c2,L.i2,L.n2,L.c1,L.i1,L.n1].join("|"));
+  });
+  /* Each linkage is accepted only near its real bond length. A loose generic cutoff
+     would read a 1.8 A clash between a lysine and a glutamine as an isopeptide bond,
+     whose true length is about 1.33 A. */
+  const is=(x,names)=>names.includes(x.name);
+  const either=(a,b,n1,n2)=>(is(a,n1)&&is(b,n2))||(is(b,n1)&&is(a,n2));
+  const chemical=(a,b)=>{
+    const d=dist(a,b);
+    if(either(a,b,["SG"],["SG"])) return d<=2.5;                               /* disulfide, 2.05 A */
+    if(either(a,b,["NZ"],["CD","CG"])) return d<=1.6;                          /* isopeptide, 1.33 A */
+    if(either(a,b,["O3'","O3*"],["P"])) return d<=1.8;                         /* phosphodiester, 1.6 A */
+    if(a.chain===b.chain && either(a,b,["C"],["N"])) return d<=1.6;            /* peptide within a chain */
+    if((is(a,["C1"])&&(b.elem==="O"||b.elem==="N"))||(is(b,["C1"])&&(a.elem==="O"||a.elem==="N")))
+      return d<=1.65;                                                          /* glycosidic, 1.43 A */
+    return declared.has([a.chain,a.resi,a.name,b.chain,b.resi,b.name].join("|"));  /* LINK record */
+  };
+  /* the grid returns each atom's index in the full structure, not its position in the
+     filtered list it was built from */
+  const isReal=new Uint8Array(atoms.length); real.forEach(a=>isReal[a.idx]=1);
+  const grid=makeGrid(real, 2.6);
+  let links=0;
+  real.forEach(a=>{
+    for(const k of grid.near(a)){
+      if(!isReal[k]) continue;
+      const b=atoms[k]; if(!b||b.idx<=a.idx) continue;
+      if(b.ridx===a.ridx) continue;
+      if(a.chain===b.chain && a.resi===b.resi) continue;               /* the alchemical ghost */
+      if(!bonded(a,b)) continue;
+      if(!chemical(a,b)) continue;                                     /* a clash, not a bond */
+      if(a.chain===b.chain && Math.abs(a.resi-b.resi)===1 &&
+         ((a.name==="C"&&b.name==="N")||(a.name==="N"&&b.name==="C"))) continue;  /* peptide, handled already */
+      links++;
+      const i=a.idx, j=b.idx;
+      const A2=neighbours(i), B2=neighbours(j);
+      const A3=[], B3=[];
+      A2.forEach(x=>neighbours(x).forEach(y=>{ if(y!==i) A3.push(y); }));
+      B2.forEach(x=>neighbours(x).forEach(y=>{ if(y!==j) B3.push(y); }));
+      exclude(i,j);                                                      /* 1-2 */
+      B2.forEach(y=>exclude(i,y)); A2.forEach(x=>exclude(x,j));          /* 1-3 */
+      B3.forEach(y=>exclude(i,y)); A3.forEach(x=>exclude(x,j));          /* 1-4 */
+      A2.forEach(x=>B2.forEach(y=>exclude(x,y)));
+    }
+  });
+  S.covalentLinks=links;
+  return links;
 }
 
 /* ============================================================
@@ -1948,6 +2084,7 @@ function computeSASA(atoms, subsetIdx, probe=1.4){
 const EXCL_UP=new Set(["C","O","CA"]), EXCL_DN=new Set(["N","CA","CB"]);
 function bondExcluded(a,b){
   if(a.ridx===b.ridx) return true;
+  if(a.xex && a.xex.has(b.idx)) return true;       /* across a covalent link between residues */
   if(a.chain!==b.chain) return false;
   const dr=a.resi-b.resi;
   if(Math.abs(dr)!==1) return false;
@@ -4053,6 +4190,9 @@ function loadStructure(text, name){
     $("#btnplddt").disabled=true; $("#btnconf").disabled=!ST.pae;
     $("#btnconscolor").disabled=true;
     $("#btndens").disabled=!ST.map; $("#btndenscolor").disabled=true;
+    $("#btnunexpl").disabled=!ST.map; ST.unex=null; ST.unexShown=false;
+    $("#btnfit").disabled=!ST.map; ST.fit=null;
+    $("#btnmapexport").disabled=!ST.map;
     if(parsed.models && parsed.models.length>1){
       ST.modelAtoms=parsed.models;
       ST.frames=parsed.models.map(m=>m.map(a=>({x:a.x,y:a.y,z:a.z})));
@@ -4269,23 +4409,28 @@ async function renderViewer(which, reset){
 /* the viewer clears every shape when it redraws, so the cached mesh is added again each time */
 function drawMapContour(v){
   ST.mapShapes=[];
-  if(!v||!ST.mapShown||!ST.mapMesh||!ST.mapMesh.triangles) return;
-  const m=ST.mapMesh, per=20000;
-  for(let t0=0;t0<m.triangles;t0+=per){
-    const n=Math.min(per,m.triangles-t0);
-    const vertexArr=new Array(n*3), normalArr=new Array(n*3), faceArr=new Array(n*3);
-    for(let k=0;k<n;k++){
-      const tt=t0+k;
-      for(let j=0;j<3;j++){
-        const o=(tt*3+j)*3, i=k*3+j;
-        vertexArr[i]={x:m.positions[o], y:m.positions[o+1], z:m.positions[o+2]};
-        normalArr[i]={x:m.normals[tt*3], y:m.normals[tt*3+1], z:m.normals[tt*3+2]};
-        faceArr[i]=i;
+  if(!v) return;
+  const meshes=[];
+  if(ST.mapShown&&ST.mapMesh&&ST.mapMesh.triangles) meshes.push(ST.mapMesh);
+  if(ST.unexShown&&ST.unexMeshes) ST.unexMeshes.forEach(m=>{ if(m&&m.triangles) meshes.push(m); });
+  const per=20000;
+  meshes.forEach(m=>{
+    for(let t0=0;t0<m.triangles;t0+=per){
+      const n=Math.min(per,m.triangles-t0);
+      const vertexArr=new Array(n*3), normalArr=new Array(n*3), faceArr=new Array(n*3);
+      for(let k=0;k<n;k++){
+        const tt=t0+k;
+        for(let j=0;j<3;j++){
+          const o=(tt*3+j)*3, i=k*3+j;
+          vertexArr[i]={x:m.positions[o], y:m.positions[o+1], z:m.positions[o+2]};
+          normalArr[i]={x:m.normals[tt*3], y:m.normals[tt*3+1], z:m.normals[tt*3+2]};
+          faceArr[i]=i;
+        }
       }
+      ST.mapShapes.push(v.addCustom({vertexArr, normalArr, faceArr, color:m.color,
+        alpha:m.solid?0.45:1, wireframe:!m.solid}));
     }
-    ST.mapShapes.push(v.addCustom({vertexArr, normalArr, faceArr, color:m.color,
-      alpha:m.solid?0.45:1, wireframe:!m.solid}));
-  }
+  });
 }
 $("#btnmapshow").onclick=()=>mapShow().catch(e=>log("Map display: "+e.message,"err"))
   .finally(()=>busy(null));
@@ -4341,6 +4486,160 @@ async function mapShow(){
     "The numbers above are still valid.","warn"); return; }
   await renderViewer(ST.shown||"wt", false);
 }
+$("#btnunexpl").onclick=()=>unexplRun().catch(e=>log("Unexplained density: "+e.message,"err"))
+  .finally(()=>busy(null));
+async function unexplRun(){
+  if(!ST.map||!ST.wt){ log("Load a structure and a map first.","warn"); return; }
+  const auto=$("#unexauto").checked;
+  busy(auto?"Finding the resolution that best matches the map\u2026":"Simulating the model's density\u2026");
+  await nextFrame();
+  const t0=performance.now();
+  const R=unexplainedDensity(ST.wt, ST.map, {
+    resolution: auto ? "auto" : (+$("#mapres").value||3.0),
+    level: Math.max(1,+$("#unexlevel").value||3),
+    minVolume: Math.max(1,+$("#unexmin").value||30),
+    negative: $("#unexneg").checked});
+  R.seconds=+((performance.now()-t0)/1000).toFixed(1);
+  const lv=R.threshold/R.sigmaD;
+  const mk=(field,color)=>{ const C=contourMap(field, lv, null, {dust:false});
+    return C.error?null:{...C, color, solid:false}; };
+  ST.unex=R;
+  ST.unexMeshes=[mk(R.fieldPositive,"#3DDC84")].concat($("#unexneg").checked?[mk(R.fieldNegative,"#F2545B")]:[]);
+  ST.unexShown=true;
+  renderUnexplained();
+  log(`Unexplained density: ${R.positive.length} piece(s) the model does not account for, `+
+      `${R.negative.length} region(s) of model with no density behind it, at ${R.resolution} \u00C5, ${R.seconds} s.`,"ok");
+  if(ST.viewer) await renderViewer(ST.shown||"wt", false);
+}
+function renderUnexplained(){
+  const R=ST.unex; if(!R) return;
+  const row=(p,i)=>{
+    const near=p.residues.slice(0,4).map(x=>resLabel(x.r)).join(", ")||"\u2014";
+    const notes=[];
+    if(p.sign>0&&p.glycanSite) notes.push("at an N-glycosylation sequon, so possibly a glycan");
+    if(p.sign>0&&p.distanceFromModel>6) notes.push("well away from the model");
+    if(p.sign>0&&p.distanceFromModel<=2) notes.push("within the model, so perhaps a misplaced side chain or a ligand");
+    return `<tr><td>${i+1}</td><td class="num">${p.volume.toFixed(0)}</td><td class="num">${p.peak.toFixed(1)}</td>
+      <td class="num">${p.distanceFromModel.toFixed(1)}</td><td>${near}</td><td class="sub">${notes.join("; ")}</td></tr>`;
+  };
+  const scan=R.resolutionScan?` The scan of resolutions gave correlations of `+
+    R.resolutionScan.map(x=>`${x.r.toFixed(3)} at ${x.resolution} \u00C5`).join(", ")+".":"";
+  setPane("p-unexpl",`
+    <div class="stats">
+      <div class="stat"><b class="${R.positive.length?"losscell":"gaincell"}">${R.positive.length}</b><i>pieces the model does not explain</i></div>
+      <div class="stat"><b class="${R.negative.length?"losscell":""}">${R.negative.length}</b><i>model with no density</i></div>
+      <div class="stat"><b>${R.resolution} \u00C5</b><i>${R.resolutionScan?"resolution found":"resolution given"}</i></div>
+      <div class="stat"><b>${R.scale.r.toFixed(3)}</b><i>model–map correlation near atoms</i></div>
+      <div class="stat"><b>${(100*R.unexplainedFraction).toFixed(1)}%</b><i>of the map's contrast left unexplained</i></div>
+    </div>
+    <p class="sub">The model's density was simulated on the map's own grid with the same kernel the density
+    scoring uses, scaled to the map by least squares on points within ${R.cfg.maskRadius} \u00C5 of atoms,
+    and subtracted. Pieces of what remains, at least ${R.cfg.minVolume} \u00C5\u00B3 and beyond
+    ${(R.threshold/R.sigmaD).toFixed(1)} times the spread of the difference, are listed below and drawn in
+    the viewer: green where the map has density the model does not account for, red where the model has
+    nothing behind it.${scan}</p>
+    ${R.positive.length?`<h3 style="font-size:13px;margin:12px 0 6px">Density the model does not explain</h3>
+    <table><thead><tr><th>#</th><th class="num">Å³</th><th class="num">peak σ</th><th class="num">Å from model</th>
+      <th>Nearest residues</th><th>Notes</th></tr></thead><tbody>${R.positive.slice(0,25).map(row).join("")}</tbody></table>`:
+      `<p class="sub">Nothing above the level. At this threshold the model accounts for the map.</p>`}
+    ${R.negative.length?`<h3 style="font-size:13px;margin:12px 0 6px">Model with no density behind it</h3>
+    <table><thead><tr><th>#</th><th class="num">Å³</th><th class="num">depth σ</th><th class="num">Å from model</th>
+      <th>Residues</th><th></th></tr></thead><tbody>${R.negative.slice(0,25).map(row).join("")}</tbody></table>`:""}
+    <p class="sub">What this does not do: it cannot say what unexplained density is. A glycan, a ligand, an
+    ion, a misplaced side chain, an unmodelled loop or a partner subunit all look alike here, and the notes
+    are hints from position, not identifications. Density at the very edge of a map, and in regions of
+    lower local resolution, can also appear because one global resolution is used for the whole model.</p>`);
+  goPane("p-unexpl");
+}
+
+$("#btnfit").onclick=()=>fitRun().catch(e=>log("Fit: "+e.message,"err")).finally(()=>busy(null));
+async function fitRun(){
+  if(!ST.map||!ST.wt){ log("Load a structure and a map first.","warn"); return; }
+  let domains=null, dinfo=null;
+  if($("#fitdomains").checked){
+    if(!ST.pae){ log("Fitting by domain needs the model's PAE file; fitting the whole model instead.","warn"); }
+    else{
+      dinfo=paeDomains(ST.wt, ST.pae, {maxPAE:+$("#fitpaecut").value||10, minDomain:+$("#fitmindom").value||25});
+      domains=dinfo.domains;
+      if(domains.length<2){ log("The PAE defines a single rigid body; fitting the whole model.","warn"); domains=null; }
+    }
+  }
+  busy(domains?`Fitting the model, then ${domains.length} domains\u2026`:"Fitting the model\u2026"); await nextFrame();
+  const t0=performance.now();
+  const res=+$("#mapres").value||3;
+  const before=modelMapCorrelation(ST.wt, ST.map, res);
+  const F=fitModel(ST.wt, ST.map, {domains});
+  const FS=buildStructure({atoms:F.fitted.map(a=>({...a})), ssbonds:ST.wt.ssbonds, links:ST.wt.links});
+  F.correlationBefore=before; F.correlationAfter=modelMapCorrelation(FS, ST.map, res);
+  F.seconds=+((performance.now()-t0)/1000).toFixed(1); F.dinfo=dinfo; F.structure=FS; F.resolution=res;
+  ST.fit=F;
+  renderFit();
+  log(`Fit: moved ${F.whole.moved.toFixed(2)} \u00C5 (rotation ${F.whole.rotation.toFixed(1)}\u00B0, translation `+
+      `${F.whole.translation.toFixed(2)} \u00C5)`+(F.domainFits.length?`, then ${F.domainFits.length} domains separately`:"")+
+      `; correlation ${before.toFixed(3)} \u2192 ${F.correlationAfter.toFixed(3)}, ${F.seconds} s. The loaded coordinates are unchanged until you apply the fit.`,"ok");
+}
+function renderFit(){
+  const F=ST.fit; if(!F) return;
+  const W=F.whole;
+  const strained=F.joins.filter(j=>Math.abs(j.distance-1.33)>0.5);
+  setPane("p-fit",`
+    <div class="stats">
+      <div class="stat"><b>${W.moved.toFixed(2)} \u00C5</b><i>whole model moved</i></div>
+      <div class="stat"><b>${W.rotation.toFixed(1)}\u00B0</b><i>rotation</i></div>
+      <div class="stat"><b>${W.translation.toFixed(2)} \u00C5</b><i>translation</i></div>
+      <div class="stat"><b class="${F.correlationAfter>F.correlationBefore?"gaincell":""}">${F.correlationBefore.toFixed(3)} \u2192 ${F.correlationAfter.toFixed(3)}</b><i>model\u2013map correlation at ${F.resolution} \u00C5</i></div>
+      <div class="stat"><b>${W.sigmaBefore.toFixed(2)} \u2192 ${W.sigmaAfter.toFixed(2)}</b><i>mean density at atoms (\u03C3)</i></div>
+    </div>
+    <p class="sub">The model was moved as a rigid body to where the map density at its atoms is highest, first on a
+    smoothed map to widen the range it can recover from and then on the map itself. This refines a placement that
+    is roughly right. It cannot find a placement from nowhere, and in a map crowded with other density it can settle
+    into a neighbouring one, so check the result by eye before using it. A small move from a deposited model's own
+    position is expected and does not mean the deposition was wrong.</p>
+    ${F.domainFits.length?`<h3 style="font-size:13px;margin:12px 0 6px">Domains fitted separately</h3>
+    <p class="sub">Domains were taken from the predicted aligned error: groups of residues whose mutual expected
+    error stays below ${F.dinfo.cfg.maxPAE} \u00C5, at least ${F.dinfo.cfg.minDomain} residues each.
+    ${F.dinfo.unassigned.length} residues belong to no rigid body, because their confidence or their errors to
+    everything else are too poor, and follow the whole-model fit.</p>
+    <table><thead><tr><th>Domain</th><th class="num">residues</th><th class="num">mean PAE (\u00C5)</th>
+      <th class="num">moved (\u00C5)</th><th class="num">rotation (\u00B0)</th><th class="num">density at atoms (\u03C3)</th></tr></thead><tbody>
+    ${F.domainFits.map(d=>`<tr><td>${d.label}</td><td class="num">${d.size}</td><td class="num">${d.meanPAE.toFixed(1)}</td>
+      <td class="num">${d.moved.toFixed(2)}</td><td class="num">${d.rotation.toFixed(1)}</td>
+      <td class="num">${d.sigmaBefore.toFixed(2)} \u2192 ${d.sigmaAfter.toFixed(2)}</td></tr>`).join("")}
+    </tbody></table>
+    ${F.joins.length?`<p class="sub">Peptide bonds between separately fitted parts:
+      ${F.joins.map(j=>`${resLabel(j.from)}\u2013${resLabel(j.to)} ${j.distance.toFixed(2)} \u00C5`).join(", ")}.
+      ${strained.length?`<b>${strained.length} ${strained.length>1?"are":"is"} far from the 1.33 \u00C5 of a peptide bond</b>,
+      so the domains have pulled apart or into each other there; the linker needs rebuilding before the model is used.`:
+      `All are close to the 1.33 \u00C5 of a peptide bond.`}</p>`:""}`:""}
+    <div class="row" style="margin-top:12px">
+      <button id="btnfitapply">Apply the fitted coordinates</button>
+      <button id="btnfitsave">Save the fitted model as PDB</button>
+    </div>`);
+  goPane("p-fit");
+  $("#btnfitapply").onclick=()=>{
+    const name=(ST.name||"model").replace(/\.(pdb|cif|ent)$/i,"")+"_fitted.pdb";
+    loadStructure(writePDB(ST.fit.structure), name);
+    log("The fitted coordinates are now the loaded structure; analyses run before the fit were cleared.","ok");
+  };
+  $("#btnfitsave").onclick=()=>{
+    const name=(ST.name||"model").replace(/\.(pdb|cif|ent)$/i,"")+"_fitted.pdb";
+    download(name, writePDB(ST.fit.structure), "chemical/x-pdb");
+  };
+}
+
+$("#btnmapexport").onclick=()=>{
+  try{
+    if(!ST.map||!ST.wt) throw new Error("load a structure and a map first");
+    const margin=Math.max(1,+$("#mapexpmargin").value||5), zone=$("#mapzone").checked;
+    const R=mapRegion(ST.map, ST.wt.atoms, {margin, zone});
+    const base=(ST.name||"model").replace(/\.(pdb|cif|ent)$/i,"");
+    deliverBinary(`${base}_map_${zone?"zone":"box"}_${margin}A.mrc`, writeMRC(R, `Protein Workbench: ${zone?"zone":"box"} ${margin} A around ${base}`),
+      "application/octet-stream");
+    log(`Map: ${R.nx} \u00D7 ${R.ny} \u00D7 ${R.nz} voxels around the model saved, ${margin} \u00C5 margin`+
+      (zone?`, ${R.zeroed.toLocaleString("en-US")} voxels further than that from every atom set to zero`:"")+
+      (R.outside?`; ${R.outside.toLocaleString("en-US")} voxels fell outside the source map and are zero`:"")+".","ok");
+  }catch(err){ log("Map export: "+err.message,"err"); }
+};
 $("#btnmaphide").onclick=()=>{
   ST.mapShown=false; $("#btnmaphide").disabled=true;
   if(ST.viewer) renderViewer(ST.shown||"wt", false);
@@ -4742,6 +5041,7 @@ function interchainEnergy(S, chain){
     for(const j of g.near(a)){
       if(j<=i) continue; const b=S.atoms[j];
       if((b.chain===chain)===inA) continue;
+      if(bondExcluded(a,b)) continue;              /* an inter-chain disulfide is a bond, not a clash */
       const d=dist(a,b); if(d>8||d<0.5) continue;
       const e=ljPair(a,b,d,false); if(e>0) rep+=Math.min(e,20); else vdw+=e;
       const qa=chargeOf(a),qb=chargeOf(b); if(qa&&qb) elec+=coulomb(a,b,d,qa,qb);
@@ -6013,6 +6313,9 @@ async function loadMap(file){
       `${M.spacing.x.toFixed(2)} Å voxel · mean ${M.mean.toFixed(3)}, rms ${M.rms.toFixed(3)} · ${mb} MB`;
     if(!M.orthogonal) log("The unit cell is not orthogonal; map placement assumes right angles and may be wrong.","warn");
     $("#btndens").disabled=!ST.wt;
+    $("#btnunexpl").disabled=!ST.wt; ST.unex=null; ST.unexShown=false;
+    $("#btnfit").disabled=!ST.wt; ST.fit=null;
+    $("#btnmapexport").disabled=!ST.wt;
     $("#btnmapshow").disabled=false; $("#btnmaphide").disabled=true;
     ST.mapMesh=null; ST.mapShown=false; ST.mapShapes=[];
     log(`Map loaded: ${M.nc}×${M.nr}×${M.ns} voxels at ${M.spacing.x.toFixed(2)} Å.`,"ok");
@@ -6029,6 +6332,9 @@ async function densityRun(){
   let last=0;
   const sup=densitySupport(ST.wt, ST.map, {resolution:+$("#mapres").value||3.0},
     (i,n)=>{ if(i-last>=100){ last=i; busy(`Residue ${i} of ${n}…`); } });
+  busy("Computing Q-scores\u2026"); await nextFrame();
+  try{ sup.q=qScores(ST.wt, ST.map, {}, (i,n)=>{ if(i%2000===0) busy(`Q-scores: atom ${i} of ${n}\u2026`); }); }
+  catch(err){ sup.q=null; log("Q-scores could not be computed: "+err.message,"warn"); }
   ST.support=sup;
   ST.contactsWT=annotateContacts(ST.wt, ST.contactsWT, sup);
   const ms=Math.round(performance.now()-t0);
@@ -6036,8 +6342,10 @@ async function densityRun(){
     log(`Only ${(sup.coverage*100).toFixed(0)}% of atoms fall inside the map. The model and the map are `+
         `probably on different origins, so these numbers mean nothing until that is fixed.`,"err");
   }
-  const rows=[...sup.perResidue.entries()].map(([ri,v])=>({r:ST.wt.residues[ri],...v}))
+  const rows=[...sup.perResidue.entries()].map(([ri,v])=>({r:ST.wt.residues[ri],...v,
+      q:sup.q&&sup.q.perResidue.get(ri)?sup.q.perResidue.get(ri).q:NaN}))
     .filter(x=>isFinite(x.rscc)).sort((a,b)=>a.rscc-b.rscc);
+  const resNow=+$("#mapres").value||3, qExp=expectedQ(resNow);
   const good=rows.filter(x=>x.rscc>=0.8).length;
   const poor=rows.filter(x=>x.rscc<0.6);
   const weakContacts=ST.contactsWT.filter(c=>isFinite(c.rscc)&&c.rscc<0.6&&TYPES[c.type].on);
@@ -6048,7 +6356,13 @@ async function densityRun(){
       <div class="stat"><b>${good}/${rows.length}</b><i>residues above 0.8</i></div>
       <div class="stat"><b class="${poor.length?"losscell":""}">${poor.length}</b><i>below 0.6</i></div>
       <div class="stat"><b class="${weakContacts.length?"losscell":""}">${weakContacts.length}</b><i>contacts on weak density</i></div>
+      ${sup.q&&isFinite(sup.q.mean)?`<div class="stat"><b class="${sup.q.mean<qExp-0.1?"losscell":""}">${sup.q.mean.toFixed(3)}</b><i>mean Q-score; about ${qExp.toFixed(2)} expected at ${resNow.toFixed(1)} \u00C5</i></div>`:""}
     </div>
+    ${sup.q&&isFinite(sup.q.mean)?`<p class="sub">The Q-score measures how well each atom sits at the centre of its own density
+    peak: map values sampled on spheres out to 2 \u00C5, keeping only points nearer that atom than any other, correlated
+    against a Gaussian of width 0.6 \u00C5. Near 1 is an atom at the peak of sharp, resolved density; near 0, an atom with
+    no peak of its own. The expected value comes from the relation between resolution and the Q-scores of well-fitted
+    models reported with the method, and assumes the resolution you entered is the map's.</p>`:""}
     <p class="sub">Real-space correlation between the map and a density simulated from the model at
     ${(+$("#mapres").value||3).toFixed(1)} Å, computed inside a mask around each residue. Low values mean the
     model is not supported there, whether from a misplaced side chain, genuine disorder, or a region
@@ -6067,11 +6381,12 @@ async function densityRun(){
     </tbody></table>`:""}
     <h3 style="font-size:13px;margin:14px 0 6px">Residues ranked by density support</h3>
     <table><thead><tr><th>Residue</th><th class="num">correlation</th><th></th>
-      <th class="num">density z</th><th class="num">mask voxels</th></tr></thead><tbody>
+      <th class="num">Q-score</th><th class="num">density z</th><th class="num">mask voxels</th></tr></thead><tbody>
       ${rows.slice(0,120).map(x=>`<tr><td>${resLabel(x.r)}</td>
         <td class="num ${x.rscc<0.6?"losscell":x.rscc>0.85?"gaincell":""}">${x.rscc.toFixed(3)}</td>
         <td style="width:110px"><div class="bar"><i style="width:${(Math.max(0,x.rscc)*100).toFixed(0)}%;
           background:${x.rscc<0.6?"var(--loss)":"var(--gain)"}"></i></div></td>
+        <td class="num ${isFinite(x.q)&&x.q<qExp-0.2?"losscell":""}">${isFinite(x.q)?x.q.toFixed(3):"—"}</td>
         <td class="num">${isFinite(x.z)?x.z.toFixed(2):"—"}</td><td class="num">${x.n}</td></tr>`).join("")}
     </tbody></table>`);
   goPane("p-density");
@@ -6079,6 +6394,7 @@ async function densityRun(){
   $("#btndenscolor").disabled=false;
   $("#btnreport").disabled=false; $("#btnpdf").disabled=false;
   log(`Density: mean correlation ${mean(rows.map(x=>x.rscc)).toFixed(3)}, `+
+      (sup.q&&isFinite(sup.q.mean)?`mean Q-score ${sup.q.mean.toFixed(3)} (about ${qExp.toFixed(2)} expected), `:"")+
       `${poor.length} residues below 0.6, ${weakContacts.length} contacts on weak density.`,
       poor.length?"warn":"ok");
 }
@@ -6460,8 +6776,9 @@ async function hotspotScan(S, chain, cfg, onStep){
         dBind=interchainEnergy(b.M, chain).total-bindW.total;
         /* the same substitution scored against the whole structure, as a crude
            check on whether it also destabilises rather than only unbinding */
-        const eW=energyOf(S, computeSASA(S.atoms,null), null);
-        const eM=energyOf(b.M, computeSASA(b.M.atoms,null), null);
+        const regW=regionSubset(S, r.key, 15), regM=regionSubset(b.M, r.key, 15);
+        const eW=energyOf(S, computeSASA(S.atoms,regW), detectInteractions(S,{scope:"all",water:false}));
+        const eM=energyOf(b.M, computeSASA(b.M.atoms,regM), detectInteractions(b.M,{scope:"all",water:false}));
         if(eW&&eM) dFoldRigid=eM.total-eW.total;
       }catch(err){ filters.push({level:"caution", text:"could not be modelled: "+err.message}); }
     }
@@ -6648,6 +6965,479 @@ function mapCoverage(M, level, atoms){
 }
 
 /* ============================================================
+   Q-SCORES
+   How well each atom sits at the centre of its own density peak, after
+   Pintilie and colleagues: map values sampled on spheres from 0 to 2 A
+   around the atom, keeping only points closer to that atom than to any
+   other, correlated against a Gaussian of width 0.6 A. Because it is a
+   correlation, the reference's height and offset cancel and only its
+   shape matters. A value near 1 is an atom at the peak of a sharp,
+   resolved density; near 0, an atom with no peak of its own.
+   ============================================================ */
+function atomSeed(a){
+  const key=`${a.chain}|${a.resi}|${a.icode||""}|${a.name}`;
+  let h=2166136261>>>0; for(let i=0;i<key.length;i++){ h^=key.charCodeAt(i); h=Math.imul(h,16777619)>>>0; }
+  return h;
+}
+function qScores(S, M, cfg, onStep){
+  cfg=Object.assign({sigma:0.6, rMax:2.0, dr:0.1, nPoints:8, tries:50}, cfg||{});
+  const atoms=S.atoms.filter(a=>!a.water&&!a.phantom&&a.elem!=="H");
+  const grid=makeGrid(atoms, 3.0);
+  const radii=[]; for(let r=0;r<=cfg.rMax+1e-9;r+=cfg.dr) radii.push(+r.toFixed(4));
+  const ref=radii.map(r=>Math.exp(-r*r/(2*cfg.sigma*cfg.sigma)));
+  /* a fixed set of directions, rotated differently for each atom and radius so the
+     sampling does not line up with the grid, and reproducible from run to run */
+  const base=[]; const ga=Math.PI*(3-Math.sqrt(5));
+  for(let i=0;i<cfg.tries;i++){ const y=1-2*(i+0.5)/cfg.tries, rr=Math.sqrt(1-y*y), t=ga*i;
+    base.push([Math.cos(t)*rr, y, Math.sin(t)*rr]); }
+  const rot=(seed)=>{ let s=seed>>>0||1; const rnd=()=>{ s=(s*1664525+1013904223)>>>0; return s/4294967296; };
+    const u1=rnd(),u2=rnd(),u3=rnd();
+    const q=[Math.sqrt(1-u1)*Math.sin(2*Math.PI*u2), Math.sqrt(1-u1)*Math.cos(2*Math.PI*u2),
+             Math.sqrt(u1)*Math.sin(2*Math.PI*u3), Math.sqrt(u1)*Math.cos(2*Math.PI*u3)];
+    const [x,y,z,w]=q;
+    return [[1-2*(y*y+z*z),2*(x*y-z*w),2*(x*z+y*w)],[2*(x*y+z*w),1-2*(x*x+z*z),2*(y*z-x*w)],
+            [2*(x*z-y*w),2*(y*z+x*w),1-2*(x*x+y*y)]]; };
+  const perAtom=new Float32Array(S.atoms.length).fill(NaN);
+  atoms.forEach((a,n)=>{
+    const u=[], v=[];
+    let outside=false;
+    radii.forEach((r,t)=>{
+      if(r===0){ const val=M.value(a); if(!isFinite(val)) outside=true; u.push(val); v.push(ref[t]); return; }
+      /* seeded from the atom's identity, not its position in the file, so the score does not
+         change when unrelated atoms such as waters are added to or removed from the model */
+      const R=rot(atomSeed(a)+t*104729+1);
+      let got=0;
+      for(let k=0;k<base.length&&got<cfg.nPoints;k++){
+        const d=base[k];
+        const p={x:a.x+r*(R[0][0]*d[0]+R[0][1]*d[1]+R[0][2]*d[2]),
+                 y:a.y+r*(R[1][0]*d[0]+R[1][1]*d[1]+R[1][2]*d[2]),
+                 z:a.z+r*(R[2][0]*d[0]+R[2][1]*d[1]+R[2][2]*d[2])};
+        /* the point must be closer to this atom than to any other */
+        let mine=true;
+        for(const j of grid.near(p)){ const b=S.atoms[j]; if(!b||b===a||b.water||b.phantom||b.elem==="H") continue;
+          if(d2(p,b)<r*r-1e-9){ mine=false; break; } }
+        if(!mine) continue;
+        const val=M.value(p); if(!isFinite(val)){ outside=true; continue; }
+        u.push(val); v.push(ref[t]); got++;
+      }
+    });
+    if(!outside && u.length>=10) perAtom[a.idx]=pearson(u,v);
+    if(onStep&&n%500===0) onStep(n,atoms.length);
+  });
+  const perResidue=new Map();
+  S.residues.forEach(r=>{
+    const all=[], bb=[], sc=[];
+    r.atoms.forEach(i=>{ const q=perAtom[i]; if(!isFinite(q)) return; all.push(q);
+      (BACKBONE.has(S.atoms[i].name)?bb:sc).push(q); });
+    if(all.length) perResidue.set(r.ridx,{q:mean(all), backbone:bb.length?mean(bb):NaN, sidechain:sc.length?mean(sc):NaN});
+  });
+  const vals=[...perAtom].filter(isFinite);
+  return {perAtom, perResidue, mean:vals.length?mean(vals):NaN, cfg};
+}
+/* the relation between resolution and the Q-score of well-fitted models reported with the method */
+const expectedQ=res=>-0.1775*res+1.1192;
+
+/* ============================================================
+   UNEXPLAINED DENSITY
+   Scoring asks how much of the model the map supports. This asks the
+   converse: how much of the map the model explains. The model's density
+   is simulated on the map's own grid with the same kernel the scoring
+   uses, scaled to the map by least squares near the atoms, and
+   subtracted. What is left above the noise is density no atom accounts
+   for; what is left below it is model with nothing behind it.
+   ============================================================ */
+/* the map restricted to a box of grid points, as a map-like object of its own */
+function boxAround(M, atoms, margin){
+  let c0=Infinity,c1=-Infinity,r0=Infinity,r1=-Infinity,s0=Infinity,s1=-Infinity, n=0;
+  const w0=M.toWorld(0,0,0), w1=M.toWorld(1,1,1);
+  const vox=Math.min(Math.abs(w1.x-w0.x),Math.abs(w1.y-w0.y),Math.abs(w1.z-w0.z))||1;
+  const pad=Math.ceil(margin/vox);
+  atoms.forEach(a=>{
+    const q=M.toIndex(a); if(!isFinite(q.c)||!isFinite(q.r)||!isFinite(q.s)) return;
+    if(q.c<-pad||q.r<-pad||q.s<-pad||q.c>M.nc+pad||q.r>M.nr+pad||q.s>M.ns+pad) return;
+    n++;
+    c0=Math.min(c0,q.c);c1=Math.max(c1,q.c);r0=Math.min(r0,q.r);r1=Math.max(r1,q.r);s0=Math.min(s0,q.s);s1=Math.max(s1,q.s);
+  });
+  if(!n) return null;
+  const B={c0:Math.max(0,Math.floor(c0)-pad), c1:Math.min(M.nc-1,Math.ceil(c1)+pad),
+           r0:Math.max(0,Math.floor(r0)-pad), r1:Math.min(M.nr-1,Math.ceil(r1)+pad),
+           s0:Math.max(0,Math.floor(s0)-pad), s1:Math.min(M.ns-1,Math.ceil(s1)+pad)};
+  B.nx=B.c1-B.c0+1; B.ny=B.r1-B.r0+1; B.nz=B.s1-B.s0+1;
+  return B;
+}
+/* density from the model on the box, with the scoring kernel */
+function simulateOnBox(S, M, B, resolution, maskRadius){
+  const sig0=resolution/4;
+  const sigmaOf=a=>Math.sqrt(Math.max(0.25,(a.b||30)/(8*Math.PI*Math.PI))+sig0*sig0);
+  const w0=M.toWorld(B.c0,B.r0,B.s0);
+  const sub3=(a,b)=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z});
+  const o=M.toWorld(0,0,0);
+  const ec=sub3(M.toWorld(1,0,0),o), er=sub3(M.toWorld(0,1,0),o), es=sub3(M.toWorld(0,0,1),o);
+  const lc=Math.hypot(ec.x,ec.y,ec.z), lr=Math.hypot(er.x,er.y,er.z), ls=Math.hypot(es.x,es.y,es.z);
+  const N=B.nx*B.ny*B.nz, model=new Float32Array(N), near=new Uint8Array(N);
+  const R2=maskRadius*maskRadius;
+  S.atoms.forEach(a=>{
+    if(a.water||a.phantom) return;
+    const q=M.toIndex(a); if(!isFinite(q.c)) return;
+    const qc=q.c-B.c0, qr=q.r-B.r0, qs=q.s-B.s0;
+    const sg=sigmaOf(a), rad=Math.max(3*sg, maskRadius), Z=ZEFF[a.elem]||6;
+    const i0=Math.max(0,Math.floor(qc-rad/lc)), i1=Math.min(B.nx-1,Math.ceil(qc+rad/lc));
+    const j0=Math.max(0,Math.floor(qr-rad/lr)), j1=Math.min(B.ny-1,Math.ceil(qr+rad/lr));
+    const k0=Math.max(0,Math.floor(qs-rad/ls)), k1=Math.min(B.nz-1,Math.ceil(qs+rad/ls));
+    const inv=1/(2*sg*sg), cut=(3*sg)*(3*sg);
+    for(let k=k0;k<=k1;k++){ const dz=(k-qs)*ls;
+      for(let j=j0;j<=j1;j++){ const dy=(j-qr)*lr;
+        for(let i=i0;i<=i1;i++){ const dx=(i-qc)*lc;
+          const dd=dx*dx+dy*dy+dz*dz, idx=i+B.nx*(j+B.ny*k);
+          if(dd<=cut) model[idx]+=Z*Math.exp(-dd*inv);
+          if(dd<=R2) near[idx]=1;
+        } } }
+  });
+  return {model, near, voxelVolume:lc*lr*ls, lengths:[lc,lr,ls]};
+}
+function unexplainedDensity(S, M, cfg){
+  cfg=Object.assign({resolution:3.0, margin:8, level:3, maskRadius:2.5, minVolume:30,
+    negative:true, maxBoxVoxels:40e6}, cfg||{});
+  const atoms=S.atoms.filter(a=>!a.water&&!a.phantom);
+  const B=boxAround(M, atoms, cfg.margin);
+  if(!B) throw new Error("no atom of the model lies inside this map; they do not share a frame");
+  if(B.nx*B.ny*B.nz>cfg.maxBoxVoxels)
+    throw new Error(`the region around the model is ${(B.nx*B.ny*B.nz/1e6).toFixed(0)} million voxels, `+
+      `more than this can hold; analyse a single chain or a smaller region`);
+  const N=B.nx*B.ny*B.nz, obs=new Float32Array(N);
+  for(let k=0;k<B.nz;k++)for(let j=0;j<B.ny;j++)for(let i=0;i<B.nx;i++)
+    obs[i+B.nx*(j+B.ny*k)]=M.data[(B.c0+i)+M.nc*((B.r0+j)+M.nr*(B.s0+k))];
+  /* least-squares scale of model to map on voxels near atoms */
+  const fit=sim=>{
+    let n=0,sx=0,sy=0,sxx=0,sxy=0,syy=0;
+    for(let i=0;i<N;i++) if(sim.near[i]){ const x=sim.model[i], y=obs[i];
+      n++; sx+=x; sy+=y; sxx+=x*x; sxy+=x*y; syy+=y*y; }
+    if(n<20) return null;
+    const vx=sxx/n-(sx/n)**2, cxy=sxy/n-(sx/n)*(sy/n), vy=syy/n-(sy/n)**2;
+    const a=cxy/vx;
+    return {a, b:sy/n-a*sx/n, r:cxy/Math.sqrt(vx*vy), sigmaNear:Math.sqrt(Math.max(vy,0))};
+  };
+  /* The resolution need not be guessed: the one at which the model's density best
+     matches the map is found by scanning, and reported. A wrong guess leaves halos
+     around every atom that merge with genuine unexplained density. */
+  let resolution=cfg.resolution, scan=null, sim, F;
+  if(cfg.resolution==="auto"){
+    scan=[];
+    const tryRes=r=>{ const s2=simulateOnBox(S,M,B,r,cfg.maskRadius), f2=fit(s2);
+      scan.push({resolution:r, r:f2?f2.r:NaN}); return {s2,f2}; };
+    let best=null;
+    for(const r of [2,2.5,3,3.5,4,5,6,8]){ const t=tryRes(r); if(t.f2&&(!best||t.f2.r>best.f2.r)) best={r,...t}; }
+    for(const r of [best.r-0.25,best.r+0.25]) if(r>1.5){ const t=tryRes(r); if(t.f2&&t.f2.r>best.f2.r) best={r,...t}; }
+    resolution=best.r; sim=best.s2; F=best.f2;
+    scan.sort((x,y)=>x.resolution-y.resolution);
+  } else { sim=simulateOnBox(S,M,B,resolution,cfg.maskRadius); F=fit(sim); }
+  if(!F) throw new Error("too few map points near the model to scale it");
+  const a=F.a, b=F.b, rFit=F.r;
+  if(!(a>0)) throw new Error("the map does not increase where the model has density; the two do not match");
+  const D=new Float32Array(N); let dm=0;
+  for(let i=0;i<N;i++){ D[i]=obs[i]-(a*sim.model[i]+b); dm+=D[i]; }
+  dm/=N; let dv=0; for(let i=0;i<N;i++) dv+=(D[i]-dm)**2;
+  const sigmaD=Math.sqrt(dv/N);
+  /* Unexplained density must be a meaningful fraction of the map's own contrast. When the
+     model explains the map almost perfectly the residual is rounding, and three times its
+     spread would still pick out shapes in it. */
+  const floor=0.02*F.sigmaNear;
+  const threshold=Math.max(cfg.level*sigmaD, floor);
+  /* connected pieces of difference beyond the level, in either sign */
+  const atomGrid=makeGrid(atoms, 6.0);
+  const box=Object.assign({}, B);
+  const toWorld=(i,j,k)=>M.toWorld(B.c0+i,B.r0+j,B.s0+k);
+  const sequonAsn=new Set();
+  try{ (findSequons(S)||[]).forEach(q=>sequonAsn.add(q.asn.ridx)); }catch(e){}
+  const pieces=(sign)=>{
+    const thr=threshold, seen=new Uint8Array(N), out=[];
+    const queue=new Int32Array(N);
+    for(let start=0;start<N;start++){
+      if(seen[start]||sign*(D[start]-dm)<thr) continue;
+      let qn=0, head=0; queue[qn++]=start; seen[start]=1;
+      while(head<qn){
+        const cur=queue[head++], i=cur%B.nx, j=Math.floor(cur/B.nx)%B.ny, k=Math.floor(cur/(B.nx*B.ny));
+        const nb=[[i>0,cur-1],[i<B.nx-1,cur+1],[j>0,cur-B.nx],[j<B.ny-1,cur+B.nx],
+                  [k>0,cur-B.nx*B.ny],[k<B.nz-1,cur+B.nx*B.ny]];
+        for(const [ok,v] of nb) if(ok&&!seen[v]&&sign*(D[v]-dm)>=thr){ seen[v]=1; queue[qn++]=v; }
+      }
+      const vol=qn*sim.voxelVolume;
+      if(vol<cfg.minVolume) continue;
+      let peak=0, wsum=0, cx=0, cy=0, cz=0;
+      const vox=Array.from(queue.subarray(0,qn));
+      vox.forEach(v=>{ const z=sign*(D[v]-dm)/sigmaD; if(z>peak) peak=z;
+        const i=v%B.nx, j=Math.floor(v/B.nx)%B.ny, k=Math.floor(v/(B.nx*B.ny)), w=toWorld(i,j,k);
+        cx+=w.x*z; cy+=w.y*z; cz+=w.z*z; wsum+=z; });
+      const centroid={x:cx/wsum,y:cy/wsum,z:cz/wsum};
+      /* residues touching the piece, from a sample of its voxels */
+      const near=new Map(), step=Math.max(1,Math.floor(vox.length/1500));
+      for(let t=0;t<vox.length;t+=step){
+        const v=vox[t], i=v%B.nx, j=Math.floor(v/B.nx)%B.ny, k=Math.floor(v/(B.nx*B.ny)), w=toWorld(i,j,k);
+        for(const ai of atomGrid.near(w)){ const at=S.atoms[ai]; if(!at||at.water||at.phantom) continue; const d=dist(at,w);
+          if(d<=4.5){ const prev=near.get(at.ridx); if(prev===undefined||d<prev) near.set(at.ridx,d); } }
+      }
+      const residues=[...near.entries()].sort((x,y)=>x[1]-y[1]).map(([ri,d])=>({r:S.residues[ri],d}));
+      let nearestAtom=null, nd=Infinity;
+      atoms.forEach(at=>{ const d=dist(at,centroid); if(d<nd){ nd=d; nearestAtom=at; } });
+      const glycan=residues.some(x=>sequonAsn.has(x.r.ridx)&&x.d<=4.5);
+      out.push({sign, voxels:vox, volume:vol, peak, centroid, residues:residues.slice(0,8),
+        distanceFromModel:nd, nearestAtom, glycanSite:glycan});
+    }
+    out.sort((x,y)=>y.volume*y.peak-x.volume*x.peak);
+    return out;
+  };
+  const positive=pieces(+1), negative=cfg.negative?pieces(-1):[];
+  /* a field for contouring that holds only the reported pieces */
+  const shapeOf=list=>{ const f=new Float32Array(N); list.forEach(p=>p.voxels.forEach(v=>{
+      f[v]=p.sign*(D[v]-dm)/sigmaD; }));
+    /* neighbours keep their real values so the surface interpolates properly */
+    list.forEach(p=>p.voxels.forEach(v=>{
+      const i=v%B.nx, j=Math.floor(v/B.nx)%B.ny, k=Math.floor(v/(B.nx*B.ny));
+      [[i>0,v-1],[i<B.nx-1,v+1],[j>0,v-B.nx],[j<B.ny-1,v+B.nx],[k>0,v-B.nx*B.ny],[k<B.nz-1,v+B.nx*B.ny]]
+        .forEach(([ok,u])=>{ if(ok&&f[u]===0) f[u]=Math.min(threshold/sigmaD-1e-3, p.sign*(D[u]-dm)/sigmaD); });
+    }));
+    return {nc:B.nx, nr:B.ny, ns:B.nz, data:f, toWorld,
+      toIndex:p=>{ const q=M.toIndex(p); return {c:q.c-B.c0, r:q.r-B.r0, s:q.s-B.s0}; }};
+  };
+  return {cfg, resolution, resolutionScan:scan, scale:{a, b, r:rFit}, sigmaD, threshold,
+    unexplainedFraction:sigmaD/(F.sigmaNear||1), box, voxelVolume:sim.voxelVolume,
+    positive, negative, fieldPositive:shapeOf(positive), fieldNegative:shapeOf(negative)};
+}
+
+/* ============================================================
+   RIGID-BODY FITTING
+   Moves the model, or each of its domains, as a rigid body to where the
+   map density at its atoms is highest. Local only: it refines a placement
+   that is roughly right and cannot find one from nowhere. A search on a
+   smoothed map first widens the range it can recover from; a second on
+   the raw map sets the final position.
+   ============================================================ */
+function rotFromVec(v){
+  const th=Math.hypot(v[0],v[1],v[2]);
+  if(th<1e-12) return [[1,0,0],[0,1,0],[0,0,1]];
+  const k=[v[0]/th,v[1]/th,v[2]/th], c=Math.cos(th), sn=Math.sin(th), C=1-c;
+  return [[c+k[0]*k[0]*C, k[0]*k[1]*C-k[2]*sn, k[0]*k[2]*C+k[1]*sn],
+          [k[1]*k[0]*C+k[2]*sn, c+k[1]*k[1]*C, k[1]*k[2]*C-k[0]*sn],
+          [k[2]*k[0]*C-k[1]*sn, k[2]*k[1]*C+k[0]*sn, c+k[2]*k[2]*C]];
+}
+const mat3mul=(A,B)=>A.map((row,i)=>[0,1,2].map(j=>row[0]*B[0][j]+row[1]*B[1][j]+row[2]*B[2][j]));
+const rotAngleDeg=R=>Math.acos(Math.max(-1,Math.min(1,(R[0][0]+R[1][1]+R[2][2]-1)/2)))*180/Math.PI;
+function placeRigid(a, P){
+  const dx=a.x-P.c.x, dy=a.y-P.c.y, dz=a.z-P.c.z, R=P.R;
+  return {x:R[0][0]*dx+R[0][1]*dy+R[0][2]*dz+P.c.x+P.t.x,
+          y:R[1][0]*dx+R[1][1]*dy+R[1][2]*dz+P.c.y+P.t.y,
+          z:R[2][0]*dx+R[2][1]*dy+R[2][2]*dz+P.c.z+P.t.z};
+}
+function fitRigid(atoms, M, cfg){
+  cfg=Object.assign({maxEval:8000,
+    stages:[{smooth:2.0, rot:4, trans:1.5, minRot:0.25, minTrans:0.08},
+            {smooth:0, rot:1, trans:0.4, minRot:0.02, minTrans:0.005}]}, cfg||{});
+  const use=atoms.filter(a=>!a.water&&!a.phantom&&a.elem!=="H");
+  if(use.length<3) throw new Error("too few atoms to fit");
+  /* very large models search on Cα alone in the coarse stage */
+  const coarse=use.length>5000?use.filter(a=>a.name==="CA"):use;
+  let W=0; const c={x:0,y:0,z:0};
+  use.forEach(a=>{ const w=ZEFF[a.elem]||6; W+=w; c.x+=w*a.x; c.y+=w*a.y; c.z+=w*a.z; });
+  c.x/=W; c.y/=W; c.z/=W;
+  const floor=M.mean-M.rms;                       /* outside the map counts as empty */
+  const val=(p,h)=>{
+    if(!h){ const v=M.value(p); return isFinite(v)?v:floor; }
+    let s=0; for(const [dx,dy,dz] of [[0,0,0],[h,0,0],[-h,0,0],[0,h,0],[0,-h,0],[0,0,h],[0,0,-h]]){
+      const v=M.value({x:p.x+dx,y:p.y+dy,z:p.z+dz}); s+=isFinite(v)?v:floor; }
+    return s/7;
+  };
+  const score=(set,P,h)=>{ let s=0, w=0;
+    for(const a of set){ const q=placeRigid(a,P), z=ZEFF[a.elem]||6; s+=z*val(q,h); w+=z; }
+    return s/w; };
+  let P={R:[[1,0,0],[0,1,0],[0,0,1]], t:{x:0,y:0,z:0}, c};
+  if(cfg.start){ P.R=cfg.start.R; P.t={...cfg.start.t}; P.c=cfg.start.c||c; }
+  const start={R:P.R.map(r=>[...r]), t:{...P.t}, c:P.c};
+  const s0=score(use,P,0);
+  let evals=0;
+  for(const st of cfg.stages){
+    const set=st.smooth?coarse:use;
+    let rot=st.rot*Math.PI/180, tr=st.trans, best=score(set,P,st.smooth);
+    while((rot>st.minRot*Math.PI/180||tr>st.minTrans) && evals<cfg.maxEval){
+      let improved=false;
+      for(let d=0;d<6;d++) for(const sg of [1,-1]){
+        const T={R:P.R, t:{...P.t}, c:P.c};
+        if(d<3){ const v=[0,0,0]; v[d]=sg*rot; T.R=mat3mul(rotFromVec(v),P.R); }
+        else T.t[["x","y","z"][d-3]]+=sg*tr;
+        const sc=score(set,T,st.smooth); evals++;
+        if(sc>best){ best=sc; P=T; improved=true; }
+      }
+      if(!improved){ rot/=2; tr/=2; }
+    }
+  }
+  const s1=score(use,P,0);
+  let msd=0; use.forEach(a=>{ const p0=placeRigid(a,start), p1=placeRigid(a,P);
+    msd+=(p0.x-p1.x)**2+(p0.y-p1.y)**2+(p0.z-p1.z)**2; });
+  const dR=mat3mul(P.R, start.R.map((_,i)=>[0,1,2].map(j=>start.R[j][i])));
+  return {placement:P, scoreBefore:s0, scoreAfter:s1,
+    sigmaBefore:(s0-M.mean)/(M.rms||1), sigmaAfter:(s1-M.mean)/(M.rms||1),
+    moved:Math.sqrt(msd/use.length), rotation:rotAngleDeg(dR),
+    translation:Math.hypot(P.t.x-start.t.x,P.t.y-start.t.y,P.t.z-start.t.z), evals,
+    hitLimit:evals>=cfg.maxEval};
+}
+/* Domains of a predicted model from its predicted aligned error: residues whose mutual
+   errors stay low move together. Average-linkage clustering on short sequence segments,
+   cut where the average error between groups exceeds the threshold. Residues of very low
+   confidence belong to no rigid body. */
+function paeDomains(S, pae, cfg){
+  cfg=Object.assign({maxPAE:10, minDomain:25, flexiblePLDDT:50}, cfg||{});
+  const map=mapPAE(S,pae), res=map.residues, N=res.length;
+  const plddt=r=>mean(r.atoms.map(i=>S.atoms[i].b));
+  const seg=Math.max(5,Math.ceil(N/300));
+  const beads=[];
+  for(let i=0;i<N;){
+    const b=[]; const ch=res[i].chain;
+    while(i<N && b.length<seg && res[i].chain===ch){ if(plddt(res[i])>=cfg.flexiblePLDDT) b.push(i); i++; }
+    if(b.length) beads.push(b);
+  }
+  const K=beads.length;
+  if(K<2) return {domains:[{residues:beads.flat().map(i=>res[i].ridx)}], unassigned:[], cfg};
+  const pv=(i,j)=>(pae.matrix[i][j]+pae.matrix[j][i])/2;
+  const D=new Float64Array(K*K);
+  for(let a=0;a<K;a++)for(let b=a+1;b<K;b++){
+    let s=0,n=0; for(const i of beads[a]) for(const j of beads[b]){ s+=pv(i,j); n++; }
+    D[a*K+b]=D[b*K+a]=s/n; }
+  const members=beads.map((_,i)=>[i]), alive=new Array(K).fill(true), size=beads.map(b=>b.length);
+  for(;;){
+    let best=Infinity, A=-1, B=-1;
+    for(let a=0;a<K;a++) if(alive[a]) for(let b=a+1;b<K;b++) if(alive[b]&&D[a*K+b]<best){ best=D[a*K+b]; A=a; B=b; }
+    if(A<0||best>cfg.maxPAE) break;
+    for(let k=0;k<K;k++) if(alive[k]&&k!==A&&k!==B){
+      const v=(D[A*K+k]*size[A]+D[B*K+k]*size[B])/(size[A]+size[B]); D[A*K+k]=D[k*K+A]=v; }
+    size[A]+=size[B]; members[A]=members[A].concat(members[B]); alive[B]=false;
+  }
+  const domains=[], unassigned=[];
+  members.forEach((m,a)=>{ if(!alive[a]) return;
+    const idx=m.flatMap(b=>beads[b]);
+    const ridx=idx.map(i=>res[i].ridx);
+    if(ridx.length>=cfg.minDomain){
+      let s=0,n=0; for(const i of idx) for(const j of idx){ if(i!==j){ s+=pv(i,j); n++; } }
+      domains.push({residues:ridx, size:ridx.length, meanPAE:n?s/n:0});
+    } else unassigned.push(...ridx);
+  });
+  const inDomain=new Set(domains.flatMap(d=>d.residues));
+  res.forEach(r=>{ if(!inDomain.has(r.ridx)&&!unassigned.includes(r.ridx)) unassigned.push(r.ridx); });
+  domains.sort((x,y)=>Math.min(...x.residues)-Math.min(...y.residues));
+  domains.forEach((d,i)=>d.label=String.fromCharCode(65+i));
+  return {domains, unassigned, cfg};
+}
+/* The whole model first, then each domain from there; residues in no domain follow the
+   whole-model fit. The result is a new set of coordinates, and the peptide bonds that join
+   separately moved domains are reported, since a domain fitted on its own can pull away
+   from its neighbour. */
+function fitModel(S, M, cfg){
+  cfg=Object.assign({domains:null}, cfg||{});
+  const atoms=S.atoms.filter(a=>!a.water&&!a.phantom);
+  const whole=fitRigid(atoms, M, {});
+  const placeOf=new Map();
+  S.atoms.forEach(a=>placeOf.set(a.idx, whole.placement));
+  const domainFits=[];
+  if(cfg.domains&&cfg.domains.length>1){
+    cfg.domains.forEach(d=>{
+      const set=new Set(d.residues);
+      const da=atoms.filter(a=>set.has(a.ridx));
+      const f=fitRigid(da, M, {start:whole.placement});
+      da.forEach(a=>placeOf.set(a.idx, f.placement));
+      domainFits.push({label:d.label, size:d.size, meanPAE:d.meanPAE, ...f});
+    });
+  }
+  const fitted=S.atoms.map(a=>({...a, ...placeRigid(a, placeOf.get(a.idx))}));
+  /* peptide bonds between residues that moved with different placements */
+  const joins=[];
+  if(domainFits.length){
+    const domOf=new Map(); (cfg.domains||[]).forEach(d=>d.residues.forEach(r=>domOf.set(r,d.label)));
+    for(let i=0;i+1<S.residues.length;i++){
+      const r1=S.residues[i], r2=S.residues[i+1];
+      if(r1.chain!==r2.chain||!r1.std||!r2.std) continue;
+      const d1=domOf.get(r1.ridx)||"none", d2=domOf.get(r2.ridx)||"none";
+      if(d1===d2) continue;
+      const cA=S.get(r1,"C"), nB=S.get(r2,"N"); if(!cA||!nB) continue;
+      const p=fitted[cA.idx], q=fitted[nB.idx];
+      joins.push({from:r1, to:r2, domains:[d1,d2], distance:dist(p,q), before:dist(cA,nB)});
+    }
+  }
+  return {whole, domainFits, joins, fitted};
+}
+/* correlation between the map and the model's simulated density, near the atoms */
+function modelMapCorrelation(S, M, resolution){
+  const atoms=S.atoms.filter(a=>!a.water&&!a.phantom);
+  const B=boxAround(M, atoms, 4); if(!B) return NaN;
+  const sim=simulateOnBox(S, M, B, resolution, 2.5);
+  const xs=[], ys=[];
+  for(let k=0;k<B.nz;k++)for(let j=0;j<B.ny;j++)for(let i=0;i<B.nx;i++){
+    const idx=i+B.nx*(j+B.ny*k); if(!sim.near[idx]) continue;
+    xs.push(sim.model[idx]); ys.push(M.data[(B.c0+i)+M.nc*((B.r0+j)+M.nr*(B.s0+k))]); }
+  return xs.length>20?pearson(xs,ys):NaN;
+}
+
+/* ============================================================
+   MAP EXPORT
+   The region of a map around the model, written as an MRC2014 file on
+   standard x, y, z axes with its position in the ORIGIN words, so that
+   ChimeraX, Coot and other programs place it on the model. Values are
+   taken at the source map's own grid points, so nothing is interpolated.
+   Optionally, density further than the margin from every atom is set to
+   zero, which is what a figure of the density around a model usually needs.
+   ============================================================ */
+function mapRegion(M, atoms, cfg){
+  cfg=Object.assign({margin:5, zone:false}, cfg||{});
+  const at=atoms.filter(a=>!a.water&&!a.phantom).map((a,i)=>({x:a.x,y:a.y,z:a.z,idx:i}));
+  if(!at.length) throw new Error("no atoms to define the region");
+  const o=M.toWorld(0,0,0);
+  const ax=[M.toWorld(1,0,0),M.toWorld(0,1,0),M.toWorld(0,0,1)].map(p=>({x:p.x-o.x,y:p.y-o.y,z:p.z-o.z}));
+  /* the source grid must be orthogonal for its points to lie on an x, y, z lattice */
+  const off=Math.max(...ax.map(v=>{ const n=[Math.abs(v.x),Math.abs(v.y),Math.abs(v.z)].sort((a,b)=>b-a); return n[1]+n[2]; }));
+  if(off>1e-6) throw new Error("this map's grid is not orthogonal to x, y and z; it cannot be written without resampling");
+  const step={x:Math.max(...ax.map(v=>Math.abs(v.x))), y:Math.max(...ax.map(v=>Math.abs(v.y))), z:Math.max(...ax.map(v=>Math.abs(v.z)))};
+  const lo={x:Infinity,y:Infinity,z:Infinity}, hi={x:-Infinity,y:-Infinity,z:-Infinity};
+  at.forEach(a=>{ lo.x=Math.min(lo.x,a.x); lo.y=Math.min(lo.y,a.y); lo.z=Math.min(lo.z,a.z);
+    hi.x=Math.max(hi.x,a.x); hi.y=Math.max(hi.y,a.y); hi.z=Math.max(hi.z,a.z); });
+  /* snap the box to the source lattice */
+  const snap=(v,k,f)=>o[k]+f((v-o[k])/step[k])*step[k];
+  const start={x:snap(lo.x-cfg.margin,"x",Math.floor), y:snap(lo.y-cfg.margin,"y",Math.floor), z:snap(lo.z-cfg.margin,"z",Math.floor)};
+  const end={x:snap(hi.x+cfg.margin,"x",Math.ceil), y:snap(hi.y+cfg.margin,"y",Math.ceil), z:snap(hi.z+cfg.margin,"z",Math.ceil)};
+  const nx=Math.round((end.x-start.x)/step.x)+1, ny=Math.round((end.y-start.y)/step.y)+1, nz=Math.round((end.z-start.z)/step.z)+1;
+  if(nx*ny*nz>200e6) throw new Error("the region is too large to write from a browser");
+  const data=new Float32Array(nx*ny*nz);
+  const grid=cfg.zone?makeGrid(at, Math.max(cfg.margin,2)):null, R2=cfg.margin*cfg.margin;
+  let outside=0, zeroed=0;
+  for(let k=0;k<nz;k++)for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
+    const p={x:start.x+i*step.x, y:start.y+j*step.y, z:start.z+k*step.z};
+    /* the source value at this lattice point, read directly */
+    const q=M.toIndex(p), c=Math.round(q.c), r=Math.round(q.r), s3=Math.round(q.s);
+    let v=0;
+    if(c>=0&&r>=0&&s3>=0&&c<M.nc&&r<M.nr&&s3<M.ns) v=M.data[c+M.nc*(r+M.nr*s3)]; else outside++;
+    if(grid){ let near=false; for(const n of grid.near(p)){ if(d2(p,at[n])<=R2){ near=true; break; } }
+      if(!near){ v=0; zeroed++; } }
+    data[i+nx*(j+ny*k)]=v;
+  }
+  return {nx,ny,nz,data,origin:start,step,outside,zeroed,cfg};
+}
+function writeMRC(R, label){
+  const {nx,ny,nz,data,origin,step}=R;
+  const buf=new ArrayBuffer(1024+data.length*4), dv=new DataView(buf);
+  const i32=(w,v)=>dv.setInt32((w-1)*4,v,true), f32=(w,v)=>dv.setFloat32((w-1)*4,v,true);
+  let mn=Infinity,mx=-Infinity,sum=0; for(const v of data){ if(v<mn) mn=v; if(v>mx) mx=v; sum+=v; }
+  const mean=sum/data.length; let sq=0; for(const v of data) sq+=(v-mean)**2;
+  i32(1,nx);i32(2,ny);i32(3,nz);i32(4,2);i32(5,0);i32(6,0);i32(7,0);i32(8,nx);i32(9,ny);i32(10,nz);
+  f32(11,nx*step.x);f32(12,ny*step.y);f32(13,nz*step.z);f32(14,90);f32(15,90);f32(16,90);
+  i32(17,1);i32(18,2);i32(19,3);f32(20,mn);f32(21,mx);f32(22,mean);i32(23,1);i32(24,0);
+  i32(28,20140);
+  f32(50,origin.x);f32(51,origin.y);f32(52,origin.z);
+  [0x4d,0x41,0x50,0x20].forEach((b,k)=>dv.setUint8(208+k,b));
+  dv.setUint8(212,0x44); dv.setUint8(213,0x44);
+  f32(55,Math.sqrt(sq/data.length));
+  const lab=(label||"The Protein Workbench: map region around a model").slice(0,80);
+  i32(56,1); for(let k=0;k<lab.length;k++) dv.setUint8(224+k,lab.charCodeAt(k)&0x7f);
+  for(let k=0;k<data.length;k++) dv.setFloat32(1024+k*4,data[k],true);
+  return new Uint8Array(buf);
+}
+
+/* ============================================================
    ATOMIC FORCE MICROSCOPY
    An AFM topograph is the surface a tip of finite size traces over a
    molecule lying on a substrate. Simulating that from coordinates or
@@ -6683,7 +7473,8 @@ function fibonacciDirections(n){
 }
 /* the upper envelope of a set of spheres, sampled on a square grid */
 function envelopeFromAtoms(atoms, R, cfg){
-  const pts=atoms.map(a=>({p:applyRot(R,a), r:(VDW[a.elem]||1.7)}));
+  /* an atom may carry its own radius (a map's pseudo-atoms do); otherwise its element's */
+  const pts=atoms.map(a=>({p:applyRot(R,a), r:(a.rad||VDW[a.elem]||1.7)}));
   let minx=Infinity,maxx=-Infinity,miny=Infinity,maxy=-Infinity,minz=Infinity;
   pts.forEach(({p,r})=>{ minx=Math.min(minx,p.x-r); maxx=Math.max(maxx,p.x+r);
     miny=Math.min(miny,p.y-r); maxy=Math.max(maxy,p.y+r); minz=Math.min(minz,p.z-r); });
@@ -6707,20 +7498,6 @@ function envelopeFromAtoms(atoms, R, cfg){
   return {z, nx, ny, pixel:h, x0:minx, y0:miny, base:minz};
 }
 /* the same, from a density map above a contour */
-function envelopeFromMap(M, level, R, cfg){
-  const pts=[];
-  for(let i=0;i<M.nx;i++)for(let j=0;j<M.ny;j++)for(let k=0;k<M.nz;k++){
-    if(M.value(i,j,k)<level) continue;
-    pts.push(applyRot(R,M.coord(i,j,k)));
-  }
-  if(!pts.length) throw new Error("no density above that level");
-  const r=M.spacing*0.75;
-  const fake=pts.map(p=>({...p, elem:"C"}));
-  const saved=VDW.C; VDW.C=r;
-  const env=envelopeFromAtoms(fake, [[1,0,0],[0,1,0],[0,0,1]], cfg);
-  VDW.C=saved;
-  return env;
-}
 /* dilate the surface by the tip: a sphere of radius R closing into a cone */
 function tipKernel(pixel, radius, halfAngleDeg, reach){
   const ha=halfAngleDeg*Math.PI/180;
@@ -6887,6 +7664,425 @@ function parseHeightMatrix(text, cfg){
     z[i*ny+j]=v; if(v<lo) lo=v; }
   for(let i=0;i<z.length;i++) z[i]-=lo;     /* substrate at zero */
   return {z, nx, ny, pixel:cfg.pixel, x0:0, y0:0};
+}
+
+/* Image preparation. A raw topograph carries the scanner's tilt, an offset that differs
+   from one scan line to the next, and the odd spike; all three pass straight into a fit
+   unless removed. The background is fitted only on pixels classed as substrate, and the
+   class is re-estimated over several rounds so the molecule never drags the fit. The
+   substrate is set to zero at its median, not its lowest point, which a single spike
+   below the surface would otherwise decide. */
+function prepareTopograph(img, cfg){
+  cfg=Object.assign({plane:1, lines:true, spikes:true, scan:"rows", maskK:3, iterations:5}, cfg||{});
+  const {nx,ny}=img, N=nx*ny;
+  const z=Float64Array.from(img.z);
+  const medianOf=a=>{ if(!a.length) return 0; const b=Float64Array.from(a).sort(); const m=b.length>>1;
+    return b.length%2?b[m]:(b[m-1]+b[m])/2; };
+  /* spikes, against the median of their 3 x 3 neighbourhood */
+  let spikes=0;
+  if(cfg.spikes){
+    const med=new Float64Array(N), res=new Float64Array(N);
+    for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){
+      const v=[]; for(let di=-1;di<=1;di++)for(let dj=-1;dj<=1;dj++){
+        const a=i+di, b=j+dj; if(a>=0&&b>=0&&a<nx&&b<ny) v.push(z[a*ny+b]); }
+      med[i*ny+j]=medianOf(v); res[i*ny+j]=z[i*ny+j]-med[i*ny+j]; }
+    const mad=medianOf(Array.from(res,Math.abs))*1.4826;
+    if(mad>0) for(let k=0;k<N;k++) if(Math.abs(res[k])>8*mad){ z[k]=med[k]; spikes++; }
+  }
+  const lineOf=(i,j)=>cfg.scan==="columns"?j:i;
+  const nLines=cfg.scan==="columns"?ny:nx;
+  /* polynomial background on normalised coordinates */
+  const terms=(i,j)=>{ const u=(i-(nx-1)/2)/Math.max(1,nx), v=(j-(ny-1)/2)/Math.max(1,ny);
+    return cfg.plane>=2?[1,u,v,u*u,v*v,u*v]:cfg.plane===1?[1,u,v]:[1]; };
+  const solve=(A,b)=>{ const n=b.length, M=A.map((r,i)=>[...r,b[i]]);
+    for(let c=0;c<n;c++){ let p=c; for(let r=c+1;r<n;r++) if(Math.abs(M[r][c])>Math.abs(M[p][c])) p=r;
+      [M[c],M[p]]=[M[p],M[c]]; if(Math.abs(M[c][c])<1e-12) continue;
+      for(let r=0;r<n;r++) if(r!==c){ const f=M[r][c]/M[c][c]; for(let k=c;k<=n;k++) M[r][k]-=f*M[c][k]; } }
+    return M.map((r,i)=>Math.abs(r[i])<1e-12?0:r[n]/r[i]); };
+  /* The substrate class starts from the lowest pixels of each sixth of each scan line.
+     Seeding from every pixel lets a molecule that fills much of the field pass as background.
+     Seeding from the lowest pixels of the whole image, or of square tiles spanning several
+     lines, puts every seed on the low side of a tilt or on the lines whose offset happens to
+     be lowest, and the lines left without seeds are never corrected. A segment of one line
+     has seeds wherever a tilt or a line offset can reach; the few molecule pixels a segment
+     on the molecule contributes are a minority, and the re-classification removes them. */
+  let mask=new Uint8Array(N), coef=null, offsets=new Float64Array(nLines);
+  { const lineLen=cfg.scan==="columns"?nx:ny, segs=6, sw=Math.max(1,Math.ceil(lineLen/segs));
+    const at=(L,t)=>cfg.scan==="columns"?t*ny+L:L*ny+t;
+    for(let L=0;L<nLines;L++) for(let t0=0;t0<lineLen;t0+=sw){
+      const idx=[]; for(let t=t0;t<Math.min(lineLen,t0+sw);t++) idx.push(at(L,t));
+      const vals=idx.map(k=>z[k]).sort((x,y)=>x-y), cut=vals[Math.floor(0.3*(vals.length-1))];
+      idx.forEach(k=>{ if(z[k]<=cut) mask[k]=1; });
+    } }
+  /* a curved background needs enough substrate to be fitted; with too little it
+     extrapolates wildly under the molecule, so the order is lowered and the fact recorded */
+  const requested=cfg.plane; let lowered=null;
+  const w=new Float64Array(N);
+  for(let it=0; it<cfg.iterations; it++){
+    /* background polynomial, fitted with the current line offsets removed */
+    const K=terms(0,0).length, A=Array.from({length:K},()=>new Array(K).fill(0)), b=new Array(K).fill(0);
+    for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){ const k=i*ny+j; if(!mask[k]) continue;
+      const t=terms(i,j), y=z[k]-offsets[lineOf(i,j)];
+      for(let r=0;r<K;r++){ b[r]+=t[r]*y; for(let c=0;c<K;c++) A[r][c]+=t[r]*t[c]; } }
+    coef=solve(A,b);
+    for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){ const t=terms(i,j); let bg=0; for(let r=0;r<t.length;r++) bg+=coef[r]*t[r];
+      w[i*ny+j]=z[i*ny+j]-bg; }
+    /* one offset per scan line, from that line's substrate */
+    if(cfg.lines){
+      const per=Array.from({length:nLines},()=>[]);
+      for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){ const k=i*ny+j; if(mask[k]) per[lineOf(i,j)].push(w[k]); }
+      /* a line's offset is estimated only from enough substrate of its own; a line crossing
+         the molecule almost entirely takes its offset from its neighbours instead */
+      const lineLen=cfg.scan==="columns"?nx:ny, need=Math.max(5, Math.ceil(0.15*lineLen));
+      const ok=per.map(v=>v.length>=need);
+      for(let L=0;L<nLines;L++) offsets[L]=ok[L]?medianOf(per[L]):NaN;
+      for(let L=0;L<nLines;L++) if(!ok[L]){
+        let a=L-1; while(a>=0&&!ok[a]) a--; let b=L+1; while(b<nLines&&!ok[b]) b++;
+        offsets[L]= a>=0&&b<nLines ? offsets[a]+(offsets[b]-offsets[a])*(L-a)/(b-a) : a>=0 ? offsets[a] : b<nLines ? offsets[b] : 0;
+      }
+      const mo=medianOf(Array.from(offsets)); for(let L=0;L<nLines;L++) offsets[L]-=mo;
+      for(let i=0;i<nx;i++)for(let j=0;j<ny;j++) w[i*ny+j]-=offsets[lineOf(i,j)];
+    }
+    /* re-class: anything well above the substrate's spread is molecule */
+    const bgv=[]; for(let k=0;k<N;k++) if(mask[k]) bgv.push(w[k]);
+    const m=medianOf(bgv), mad=medianOf(bgv.map(v=>Math.abs(v-m)))*1.4826||1e-6;
+    const next=new Uint8Array(N); let changed=0;
+    for(let k=0;k<N;k++){ next[k]=w[k]<=m+cfg.maskK*mad?1:0; if(next[k]!==mask[k]) changed++; }
+    mask=next;
+    const nb=mask.reduce((a,c)=>a+c,0), K2=terms(0,0).length;
+    if(cfg.plane>0 && (nb<25*K2 || nb<0.2*N)){
+      lowered=lowered||cfg.plane; cfg.plane=cfg.plane-1; continue;
+    }
+    if(!changed) break;
+  }
+  const bgv=[]; for(let k=0;k<N;k++) if(mask[k]) bgv.push(w[k]);
+  const zero=medianOf(bgv);
+  const out=new Float32Array(N); for(let k=0;k<N;k++) out[k]=w[k]-zero;
+  const rmsOf=(arr,sel)=>{ const v=[]; for(let k=0;k<N;k++) if(sel[k]) v.push(arr[k]);
+    const mu=v.reduce((a,c)=>a+c,0)/Math.max(1,v.length); return Math.sqrt(v.reduce((a,c)=>a+(c-mu)**2,0)/Math.max(1,v.length)); };
+  const slope=coef&&coef.length>=3?{alongRows:coef[1]/Math.max(1,nx), alongColumns:coef[2]/Math.max(1,ny)}:{alongRows:0,alongColumns:0};
+  const offR=Array.from(offsets);
+  const note=lowered!==null?`too little bare substrate (${(100*mask.reduce((a,c)=>a+c,0)/N).toFixed(0)}% of the image) `+
+    `to fit a background of order ${requested}; order ${cfg.plane} was used instead`:"";
+  cfg.plane=requested;
+  return {...img, z:out, prep:{cfg, spikes, orderUsed:lowered!==null?Math.max(0,lowered-1):requested, note,
+    background:mask.reduce((a,c)=>a+c,0)/N,
+    tiltDegrees:{rows:Math.atan(slope.alongRows/img.pixel)*180/Math.PI, columns:Math.atan(slope.alongColumns/img.pixel)*180/Math.PI},
+    lineOffsetRange:cfg.lines?Math.max(...offR)-Math.min(...offR):0,
+    backgroundRmsBefore:rmsOf(img.z,mask), backgroundRmsAfter:rmsOf(out,mask)}};
+}
+/* How blunt can the tip have been? An image can never show a feature sharper than the tip
+   that traced it: around a peak where the apex sat on a summit, the image falls by at most
+   the tip's own rise at each offset. The largest fall over all prominent peaks is therefore a
+   profile the true tip rises at least as steeply as, and the radius it implies is an UPPER
+   bound on the tip radius, never an estimate of it. It is tight only when the surface has
+   features sharper than the tip. This is the first step of Villarrubia's blind reconstruction.
+   Noise could make a fall look steeper than it is and break the bound, so each fall is reduced
+   by the noise allowance before use. */
+function tipBound(img, cfg){
+  cfg=Object.assign({reach:6, prominence:5, noise:null, window:null, halfAngle:15}, cfg||{});
+  const {z,nx,ny,pixel}=img;
+  const sigma=cfg.noise!==null?cfg.noise:(img.prep?img.prep.backgroundRmsAfter:0);
+  const n=Math.max(1,Math.round(cfg.reach));
+  /* Prominent summits: the highest point across the whole reach of the bound, and well above
+     the substrate. The bound holds only where the tip's apex sat on a summit; with noise, a
+     pixel on the shoulder of a feature can top its immediate neighbours, and the steep fall
+     on its outer side would then imply a falsely sharp tip. */
+  if(cfg.window===null) cfg.window=Math.max(2,Math.round(cfg.reach));
+  const peaks=[];
+  for(let i=n;i<nx-n;i++)for(let j=n;j<ny-n;j++){
+    const v=z[i*ny+j]; if(v<cfg.prominence*Math.max(sigma,0.05)) continue;
+    let top=true;
+    for(let a=-cfg.window;a<=cfg.window&&top;a++)for(let b=-cfg.window;b<=cfg.window;b++){
+      if(!a&&!b) continue; if(z[(i+a)*ny+(j+b)]>v){ top=false; break; } }
+    if(top) peaks.push([i,j]);
+  }
+  /* The bound takes the largest fall over every peak and offset, so the noise allowance must
+     cover the largest of all those noise differences, not a typical one: the extreme of N
+     roughly Gaussian differences lies near sqrt(2 ln N) of their spread, and the peaks, chosen
+     for being high, carry noise biased upward by about one more. */
+  const offsets=(2*n+1)*(2*n+1)-1, N=Math.max(2,peaks.length*offsets);
+  const allowance=(Math.sqrt(2*Math.log(N))+1)*Math.SQRT2*sigma;
+  /* Where exactly did the apex touch? With noise, the highest pixel may sit a pixel or two
+     from the true summit, and measured from a displaced centre the fall at a distance takes in
+     the steep flank of the cone, which would imply a falsely sharp tip. Any pixel within noise
+     of the summit's height could be the true apex, so for each offset the smallest fall over
+     all those candidates is used: it includes the true apex, so the bound holds without
+     knowing which pixel that was. Without noise the only candidate is the summit itself. */
+  const cand=peaks.map(([i,j])=>{ const top=z[i*ny+j], c=[];
+    for(let a=-n;a<=n;a++)for(let b=-n;b<=n;b++){ const p=i+a, q=j+b;
+      if(p<0||q<0||p>=nx||q>=ny) continue; if(z[p*ny+q]>=top-allowance-1e-9) c.push([p,q]); }
+    return c; });
+  const prof=[];
+  for(let a=-n;a<=n;a++)for(let b=-n;b<=n;b++){
+    if(!a&&!b) continue;
+    const r=Math.hypot(a,b)*pixel; if(r>n*pixel) continue;
+    let t=0;
+    cand.forEach(C=>{
+      let fall=Infinity;
+      for(const [p,q] of C){ const p2=p+a, q2=q+b; if(p2<0||q2<0||p2>=nx||q2>=ny) continue;
+        const d=z[p*ny+q]-z[p2*ny+q2]; if(d<fall) fall=d; }
+      if(isFinite(fall)&&fall-allowance>t) t=fall-allowance;
+    });
+    prof.push({di:a, dj:b, r, t});
+  }
+  /* The bound on the radius is the bluntest tip of the modelled family, a sphere joined to a
+     cone of the stated half-angle, whose rise is at least the image's fall at every offset.
+     Inverting a sphere at each offset is not enough: a narrow cone rises faster than the
+     sphere it joins, and offsets on the cone would then understate the radius. Blunter tips
+     of the family rise less at every offset, so the largest consistent radius is found by
+     bisection. It is conditional on the half-angle. */
+  const ok=R=>{ const K=tipKernel(pixel, R, cfg.halfAngle, n*pixel+1e-6);
+    const by=new Map(K.map(k=>[k.di+","+k.dj,k.t]));
+    return prof.every(q=>{ const t=by.get(q.di+","+q.dj); return t===undefined||q.t<=t+1e-6; }); };
+  let R=Infinity, at=null;
+  if(prof.some(q=>q.t>0)){
+    let lo=0.25, hi=2000;
+    if(!ok(hi)){ if(!ok(lo)) lo=0; else{ for(let it=0;it<60;it++){ const mid=(lo+hi)/2; if(ok(mid)) lo=mid; else hi=mid; } } R=lo; }
+    /* the offset that sets the bound */
+    if(isFinite(R)&&R>0){ const K=tipKernel(pixel, R*1.001, cfg.halfAngle, n*pixel+1e-6);
+      const by=new Map(K.map(k=>[k.di+","+k.dj,k.t])); let worst=-Infinity;
+      prof.forEach(q=>{ const t=by.get(q.di+","+q.dj); if(t!==undefined&&q.t-t>worst){ worst=q.t-t; at=q; } }); }
+  }
+  /* the radial profile, for display: the steepest fall found at each distance */
+  const radial=new Map();
+  prof.forEach(q=>{ const k=+q.r.toFixed(2); radial.set(k,Math.max(radial.get(k)||0,q.t)); });
+  return {R, at, peaks:peaks.length, sigma, allowance, profile:prof,
+    radial:[...radial.entries()].sort((x,y)=>x[0]-y[0]).map(([r,t])=>({r,t})), cfg};
+}
+/* is a tip of this shape blunter than the image allows? */
+function tipConsistent(bound, pixel, radius, halfAngle){
+  const K=tipKernel(pixel, radius, halfAngle, bound.cfg.reach*pixel+1e-6);
+  const byOff=new Map(K.map(k=>[k.di+","+k.dj,k.t]));
+  let worst=0, where=null;
+  bound.profile.forEach(q=>{ const t=byOff.get(q.di+","+q.dj); if(t===undefined) return;
+    const short=q.t-t; if(short>worst){ worst=short; where=q; } });
+  return {consistent:worst<=0.05, shortfall:worst, where};
+}
+
+/* ---------------- Anisotropic network model and flexible fitting ----------------
+   The Gaussian network gives how much each residue moves, not in which direction. Fitting a
+   shape needs directions, which the anisotropic model supplies: springs between Calpha atoms
+   within a cutoff, whose Hessian's lowest modes are the softest collective motions. The six
+   rigid-body motions are projected out exactly, and the lowest remaining modes are found by
+   shift-and-invert subspace iteration with Rayleigh-Ritz. Large proteins are coarse-grained to a
+   bounded number of beads, every atom following its nearest bead along the chain. */
+function anmBeads(S, maxBeads){
+  const res=S.residues.filter(r=>r.std&&S.get(r,"CA"));
+  const stride=Math.max(1,Math.ceil(res.length/maxBeads));
+  const beads=[]; const beadOfRes=new Map();
+  res.forEach((r,i)=>{ if(i%stride===0) beads.push({r, p:{...S.get(r,"CA")}}); });
+  /* every residue follows the nearest bead in its own chain, by sequence position */
+  res.forEach((r,i)=>{ let best=-1, bd=Infinity;
+    beads.forEach((b,k)=>{ if(b.r.chain!==r.chain) return; const d=Math.abs(res.indexOf(b.r)-i); if(d<bd){ bd=d; best=k; } });
+    beadOfRes.set(r.ridx,best); });
+  return {beads, beadOfRes, stride};
+}
+function anmHessianContacts(beads, cutoff){
+  const c2=cutoff*cutoff, pairs=[];
+  for(let i=0;i<beads.length;i++)for(let j=i+1;j<beads.length;j++){
+    const a=beads[i].p, b=beads[j].p, d=[b.x-a.x,b.y-a.y,b.z-a.z], r2=d[0]*d[0]+d[1]*d[1]+d[2]*d[2];
+    if(r2<=c2&&r2>1e-9) pairs.push({i,j,d,r2}); }
+  return pairs;
+}
+/* H x, from the contacts, without forming H */
+function anmApply(pairs, N, x){
+  const y=new Float64Array(3*N);
+  for(const {i,j,d,r2} of pairs){
+    const dx=[x[3*j]-x[3*i],x[3*j+1]-x[3*i+1],x[3*j+2]-x[3*i+2]];
+    const proj=(d[0]*dx[0]+d[1]*dx[1]+d[2]*dx[2])/r2;
+    for(let k=0;k<3;k++){ y[3*j+k]+=d[k]*proj; y[3*i+k]-=d[k]*proj; } }
+  return y;
+}
+function anmDense(pairs, N){
+  const n=3*N, H=new Float64Array(n*n);
+  for(const {i,j,d,r2} of pairs) for(let a=0;a<3;a++)for(let b=0;b<3;b++){
+    const v=-d[a]*d[b]/r2;
+    H[(3*i+a)*n+3*j+b]+=v; H[(3*j+a)*n+3*i+b]+=v; H[(3*i+a)*n+3*i+b]-=v; H[(3*j+a)*n+3*j+b]-=v; }
+  return H;
+}
+function anmCholesky(A, n){
+  const L=new Float64Array(n*n);
+  for(let i=0;i<n;i++){
+    for(let j=0;j<=i;j++){
+      let s=A[i*n+j]; for(let k=0;k<j;k++) s-=L[i*n+k]*L[j*n+k];
+      if(i===j){ if(s<=0) throw new Error("the network matrix is not positive definite after the shift"); L[i*n+i]=Math.sqrt(s); }
+      else L[i*n+j]=s/L[j*n+j];
+    } }
+  return L;
+}
+function anmCholSolve(L, n, b){
+  const y=new Float64Array(n);
+  for(let i=0;i<n;i++){ let s=b[i]; for(let k=0;k<i;k++) s-=L[i*n+k]*y[k]; y[i]=s/L[i*n+i]; }
+  const x=new Float64Array(n);
+  for(let i=n-1;i>=0;i--){ let s=y[i]; for(let k=i+1;k<n;k++) s-=L[k*n+i]*x[k]; x[i]=s/L[i*n+i]; }
+  return x;
+}
+function jacobiEig(A, n){
+  const a=Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>A[i*n+j]));
+  const V=Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>i===j?1:0));
+  for(let sweep=0;sweep<100;sweep++){
+    let off=0; for(let i=0;i<n;i++)for(let j=i+1;j<n;j++) off+=a[i][j]*a[i][j];
+    if(off<1e-24) break;
+    for(let p=0;p<n;p++)for(let q=p+1;q<n;q++){
+      if(Math.abs(a[p][q])<1e-300) continue;
+      const th=(a[q][q]-a[p][p])/(2*a[p][q]), t=Math.sign(th||1)/(Math.abs(th)+Math.sqrt(th*th+1));
+      const c=1/Math.sqrt(t*t+1), sn=t*c;
+      for(let k=0;k<n;k++){ const akp=a[k][p], akq=a[k][q]; a[k][p]=c*akp-sn*akq; a[k][q]=sn*akp+c*akq; }
+      for(let k=0;k<n;k++){ const apk=a[p][k], aqk=a[q][k]; a[p][k]=c*apk-sn*aqk; a[q][k]=sn*apk+c*aqk; }
+      for(let k=0;k<n;k++){ const vkp=V[k][p], vkq=V[k][q]; V[k][p]=c*vkp-sn*vkq; V[k][q]=sn*vkp+c*vkq; }
+    } }
+  const order=[...Array(n).keys()].sort((i,j)=>a[i][i]-a[j][j]);
+  return {values:order.map(i=>a[i][i]), vectors:order.map(i=>V.map(row=>row[i]))};
+}
+function anmModes(S, cfg){
+  cfg=Object.assign({cutoff:15, modes:10, maxBeads:400, iterations:40, seed:7}, cfg||{});
+  const {beads, beadOfRes, stride}=anmBeads(S, cfg.maxBeads);
+  const N=beads.length, n=3*N;
+  if(N<6) throw new Error("too few residues with a Calpha for a network model");
+  const pairs=anmHessianContacts(beads, cfg.cutoff);
+  /* rigid-body motions, orthonormalised, to be projected out exactly */
+  const cen=beads.reduce((s,b)=>({x:s.x+b.p.x/N,y:s.y+b.p.y/N,z:s.z+b.p.z/N}),{x:0,y:0,z:0});
+  const rig=[];
+  for(let k=0;k<3;k++){ const v=new Float64Array(n); for(let i=0;i<N;i++) v[3*i+k]=1; rig.push(v); }
+  for(let k=0;k<3;k++){ const v=new Float64Array(n);
+    beads.forEach((b,i)=>{ const r=[b.p.x-cen.x,b.p.y-cen.y,b.p.z-cen.z], e=[0,0,0]; e[k]=1;
+      const c=[e[1]*r[2]-e[2]*r[1], e[2]*r[0]-e[0]*r[2], e[0]*r[1]-e[1]*r[0]];
+      v[3*i]=c[0]; v[3*i+1]=c[1]; v[3*i+2]=c[2]; }); rig.push(v); }
+  const dot=(a,b)=>{ let s=0; for(let i=0;i<a.length;i++) s+=a[i]*b[i]; return s; };
+  const orth=(V,against)=>{ const out=[];
+    for(const v0 of V){ const v=Float64Array.from(v0);
+      for(const u of against.concat(out)){ const c=dot(v,u); for(let i=0;i<n;i++) v[i]-=c*u[i]; }
+      const L=Math.sqrt(dot(v,v)); if(L>1e-10){ for(let i=0;i<n;i++) v[i]/=L; out.push(v); } }
+    return out; };
+  const Q0=orth(rig,[]);
+  /* shift-and-invert with a small shift keeps the factorisation positive definite */
+  const H=anmDense(pairs,N);
+  let tr=0; for(let i=0;i<n;i++) tr+=H[i*n+i];
+  const shift=1e-6*tr/n+1e-9;
+  for(let i=0;i<n;i++) H[i*n+i]+=shift;
+  const L=anmCholesky(H,n);
+  const m=Math.min(cfg.modes, n-6), p=Math.min(n-6, m+6);
+  let s0=cfg.seed>>>0||1; const rnd=()=>{ s0=(s0*1664525+1013904223)>>>0; return s0/4294967296-0.5; };
+  let X=orth(Array.from({length:p},()=>Float64Array.from({length:n},rnd)),Q0);
+  let vals=null, prev=null;
+  for(let it=0;it<cfg.iterations;it++){
+    X=orth(X.map(x=>anmCholSolve(L,n,x)),Q0);
+    /* Rayleigh-Ritz on the true Hessian */
+    const HX=X.map(x=>anmApply(pairs,N,x)), k=X.length, T=new Float64Array(k*k);
+    for(let a=0;a<k;a++)for(let b=0;b<k;b++) T[a*k+b]=dot(X[a],HX[b]);
+    for(let a=0;a<k;a++)for(let b=a+1;b<k;b++){ const v=(T[a*k+b]+T[b*k+a])/2; T[a*k+b]=T[b*k+a]=v; }
+    const E=jacobiEig(T,k);
+    X=E.vectors.map(c=>{ const v=new Float64Array(n); c.forEach((w,a)=>{ for(let i=0;i<n;i++) v[i]+=w*X[a][i]; }); return v; });
+    vals=E.values;
+    if(prev && vals.slice(0,m).every((v,i)=>Math.abs(v-prev[i])<=1e-10*Math.max(1,Math.abs(v)))) break;
+    prev=vals.slice();
+  }
+  const modes=X.slice(0,m).map((v,i)=>{
+    const Hv=anmApply(pairs,N,v); let res=0; for(let j=0;j<n;j++) res+=(Hv[j]-vals[i]*v[j])**2;
+    return {eigenvalue:vals[i], vector:v, residual:Math.sqrt(res)}; });
+  return {beads, beadOfRes, stride, pairs:pairs.length, modes, N, cfg, rigid:Q0};
+}
+/* Flexible fitting into an AFM image along the softest modes. Starts from a rigid fit's
+   orientation and searches mode amplitudes, in angstroms of root-mean-square bead displacement,
+   for the best match to the measured topograph. A penalty grows with each mode's stiffness, so a
+   noisy image is not fitted by stiff, implausible motions; and since the modes are linear,
+   large amplitudes distort local geometry, which is checked and reported. */
+async function flexFitAFM(S, target, R, cfg, onStep){
+  cfg=Object.assign({modes:6, maxAmp:8, penalty:0.004, cutoff:15, maxBeads:400, maxStrain:0.6}, cfg||{});
+  const anm=anmModes(S,{modes:cfg.modes, cutoff:cfg.cutoff, maxBeads:cfg.maxBeads});
+  const atoms=S.atoms.filter(a=>!a.water&&!a.phantom);
+  const N=anm.N, scale=Math.sqrt(N), lam1=anm.modes[0].eigenvalue;
+  const bead=atoms.map(a=>anm.beadOfRes.get(a.ridx));
+  /* collectivity of each mode: the fraction of beads that take part in it */
+  anm.modes.forEach(md=>{ let ent=0; for(let b=0;b<N;b++){ const u=md.vector[3*b]**2+md.vector[3*b+1]**2+md.vector[3*b+2]**2;
+    if(u>0) ent-=u*Math.log(u); } md.collectivity=Math.exp(ent)/N; });
+  const deform=amps=>atoms.map((a,i)=>{ const b=bead[i]; if(b===undefined||b<0) return {...a};
+    let dx=0,dy=0,dz=0; anm.modes.forEach((md,k)=>{ const w=amps[k]*scale; if(!w) return;
+      dx+=w*md.vector[3*b]; dy+=w*md.vector[3*b+1]; dz+=w*md.vector[3*b+2]; });
+    return {...a, x:a.x+dx, y:a.y+dy, z:a.z+dz}; });
+  /* Linear modes stretch the chain at large amplitudes. A deformation that changes any
+     consecutive Calpha spacing by more than the strain limit is not a protein, and is refused. */
+  const caPairs=[]; { const ca=atoms.map((a,i)=>a.name==="CA"?i:-1).filter(i=>i>=0);
+    for(let t=0;t+1<ca.length;t++){ const i=ca[t], j=ca[t+1];
+      if(atoms[i].chain===atoms[j].chain&&atoms[j].resi-atoms[i].resi===1) caPairs.push([i,j,dist(atoms[i],atoms[j])]); } }
+  const strainOf=amps=>{ let worst=0; for(const [i,j,d0] of caPairs){
+      const bi=bead[i], bj=bead[j]; let dx=atoms[j].x-atoms[i].x, dy=atoms[j].y-atoms[i].y, dz=atoms[j].z-atoms[i].z;
+      anm.modes.forEach((md,k)=>{ const w=amps[k]*scale; if(!w) return;
+        dx+=w*(md.vector[3*bj]-md.vector[3*bi]); dy+=w*(md.vector[3*bj+1]-md.vector[3*bi+1]); dz+=w*(md.vector[3*bj+2]-md.vector[3*bi+2]); });
+      const dv=Math.abs(Math.hypot(dx,dy,dz)-d0); if(dv>worst) worst=dv; }
+    return worst; };
+  let evals=0;
+  const evalAt=amps=>{ evals++;
+    if(strainOf(amps)>cfg.maxStrain) return {score:-Infinity, fit:-Infinity, strained:true};
+    const sim=simulateAFM(deform(amps), R, cfg), mm=matchImages(target, sim, {});
+    let pen=0; anm.modes.forEach((md,k)=>{ pen+=cfg.penalty*amps[k]*amps[k]*md.eigenvalue/lam1; });
+    return {score:mm.cc-mm.nrms-pen, fit:mm.cc-mm.nrms, cc:mm.cc, nrms:mm.nrms}; };
+  let amps=new Array(anm.modes.length).fill(0);
+  const before=evalAt(amps);
+  let best=before;
+  /* first a scan across each mode's whole range, so the search is not stranded near zero;
+     then a pattern search from the best point found */
+  for(let round=0;round<2;round++) for(let k=0;k<amps.length;k++){
+    for(let v=-cfg.maxAmp; v<=cfg.maxAmp+1e-9; v+=cfg.maxAmp/6){
+      const t=amps.slice(); t[k]=v; const e=evalAt(t); if(e.score>best.score){ best=e; amps=t; } }
+    if(onStep) await onStep(evals, k);
+  }
+  let step=cfg.maxAmp/12;
+  while(step>0.05){
+    let improved=false;
+    for(let k=0;k<amps.length;k++) for(const sg of [1,-1]){
+      const t=amps.slice(); t[k]=Math.max(-cfg.maxAmp,Math.min(cfg.maxAmp,t[k]+sg*step));
+      if(t[k]===amps[k]) continue;
+      const e=evalAt(t); if(e.score>best.score){ best=e; amps=t; improved=true; } }
+    if(onStep) await onStep(evals, step);
+    if(!improved) step/=2;
+  }
+  const moved=deform(amps);
+  let msd=0, nca=0;
+  atoms.forEach((a,i)=>{ if(a.name!=="CA") return; msd+=(moved[i].x-a.x)**2+(moved[i].y-a.y)**2+(moved[i].z-a.z)**2; nca++; });
+  return {anm, amplitudes:amps, before, after:best, evals, rmsd:Math.sqrt(msd/Math.max(1,nca)),
+    geometry:{worstCaSpacingChange:strainOf(amps), limit:cfg.maxStrain}, moved, cfg};
+}
+
+/* Several candidate structures against several measured images: each structure is fitted to
+   each image, and the structures are ranked by how consistently they fit. A crop on which the
+   two best structures score within the tolerance does not prefer either, and says so. */
+async function compareAFM(structs, images, cfg, onStep){
+  /* Every candidate is searched as thoroughly as a single fit. A coarser search saves time
+     and costs correctness: a candidate whose true orientation is missed scores low and loses
+     to a wrong structure, and the ranking looks confident while being wrong.
+     Pairs already finished in an earlier, interrupted run are taken from cfg.done; each new
+     pair is handed to cfg.onCell as it finishes, so it can be saved at once; and the run stops
+     between pairs when cfg.shouldStop says so. */
+  cfg=Object.assign({directions:80, spins:12, refine:8, tolerance:0.05}, cfg||{});
+  const cells=[]; let n=0, resumed=0, stopped=false;
+  const total=structs.length*images.length;
+  outer: for(const S of structs) for(const I of images){
+    const key=(S.key||S.name)+"|"+(I.key||I.name);
+    const prior=cfg.done&&cfg.done.get(key);
+    if(prior){ cells.push({...prior, structure:S.name, image:I.name}); n++; resumed++; continue; }
+    if(cfg.shouldStop&&cfg.shouldStop()){ stopped=true; break outer; }
+    if(onStep) await onStep(n, total, S.name, I.name);
+    n++;
+    const F=await fitAFM(S.atoms, I.img, {...cfg, pixel:I.img.pixel});
+    const cell={key, structure:S.name, image:I.name, score:F.best.cc-F.best.nrms, cc:F.best.cc, nrms:F.best.nrms,
+      degenerate:F.degenerate, rivals:F.rivals.length, height:F.best.height};
+    cells.push(cell);
+    if(cfg.onCell) await cfg.onCell(cell);
+  }
+  const perImage=images.map(I=>{
+    const row=cells.filter(c=>c.image===I.name).sort((a,b)=>b.score-a.score);
+    const margin=row.length>1?row[0].score-row[1].score:Infinity;
+    return {image:I.name, best:row[0]?row[0].structure:null, margin, decided:row.length>0&&margin>=cfg.tolerance};
+  });
+  const ranking=structs.map(S=>{
+    const mine=cells.filter(c=>c.structure===S.name);
+    return {structure:S.name, meanScore:mine.length?mine.reduce((a,c)=>a+c.score,0)/mine.length:NaN,
+      wins:perImage.filter(p=>p.decided&&p.best===S.name).length,
+      ties:perImage.filter(p=>!p.decided).length};
+  }).sort((a,b)=>b.wins-a.wins||b.meanScore-a.meanScore);
+  return {cells, perImage, ranking, cfg, total, resumed, stopped, complete:cells.length===total};
 }
 
 /* ============================================================
@@ -9025,6 +10221,8 @@ function afmAtoms(){
     }
     if(!pts.length) throw new Error("no density above that level");
     const vox=(M.spacing.x+M.spacing.y+M.spacing.z)/3*stride;
+    /* each pseudo-atom carries its own radius, so the global radius table is never altered */
+    pts.forEach(q=>q.rad=vox*0.75);
     return {atoms:pts, source:`density above ${level}`, radius:vox*0.75};
   }
   if(!ST.wt) throw new Error("load a structure, or a map and a contour level");
@@ -9035,8 +10233,6 @@ async function afmSim(){
   busy("Simulating the topograph\u2026"); await nextFrame();
   const {atoms, source, radius}=afmAtoms();
   const cfg=afmConfig();
-  const saved=VDW.C;
-  if(radius) VDW.C=radius;
   /* lie the molecule on the substrate with its broadest face down, which is
      what adsorption usually produces */
   const c=centroid(atoms);
@@ -9049,7 +10245,7 @@ async function afmSim(){
   const m=ev.values.indexOf(Math.min(...ev.values));
   const R=rotationFromUp({x:ev.vectors[0][m], y:ev.vectors[1][m], z:ev.vectors[2][m]}, 0);
   const img=simulateAFM(atoms, R, cfg);
-  VDW.C=saved;
+
   ST.afm={sim:img, R, cfg, source};
   setPane("p-afm",`
     <div class="stats">
@@ -9083,19 +10279,240 @@ async function afmSim(){
   log(`AFM: simulated topograph ${img.height.toFixed(1)} \u00C5 tall over `+
       `${(img.footprint/100).toFixed(0)} nm\u00B2.`,"ok");
 }
+function afmPrepCfg(){ return {plane:+$("#afmplane").value, lines:$("#afmlines").checked,
+  spikes:$("#afmspikes").checked, scan:$("#afmscan").value}; }
+function afmPrepare(){
+  if(!ST.afmRaw) return;
+  ST.afmTarget=prepareTopograph(ST.afmRaw, afmPrepCfg());
+  ST.afmTarget.name=ST.afmRaw.name;
+}
+function afmPrepNote(P){
+  return `Prepared before fitting: ${P.spikes} spike${P.spikes===1?"":"s"} removed; background fitted as `+
+    `${["an offset","a plane","a second-order surface"][P.orderUsed]} on the ${(100*P.background).toFixed(0)}% of pixels `+
+    `classed as substrate, a tilt of ${P.tiltDegrees.rows.toFixed(2)}\u00B0 and ${P.tiltDegrees.columns.toFixed(2)}\u00B0`+
+    (P.cfg.lines?`, scan-line offsets spanning ${P.lineOffsetRange.toFixed(1)} \u00C5`:"")+
+    `; substrate roughness ${P.backgroundRmsBefore.toFixed(2)} \u00C5 before and ${P.backgroundRmsAfter.toFixed(2)} \u00C5 after. `+
+    (P.note?`<b>Note:</b> ${P.note}. `:"")+
+    `The substrate is set to zero at its median rather than its lowest point, so one spike below the surface cannot shift the image.`;
+}
+["#afmplane","#afmscan","#afmlines","#afmspikes"].forEach(id=>{ $(id).onchange=()=>{
+  if(!ST.afmRaw) return;
+  afmPrepare();
+  log("AFM: the image was prepared again with the new settings. "+afmPrepNote(ST.afmTarget.prep).replace(/<[^>]+>/g,""),"ok");
+}; });
+$("#btnafmtip").onclick=()=>{ try{ afmTipRun(); }catch(e){ log("Tip bound: "+e.message,"err"); } };
+function afmTipRun(){
+  if(!ST.afmTarget) throw new Error("load a measured image first");
+  const cfg=afmConfig(), img=ST.afmTarget;
+  const reach=Math.max(3,Math.round(12/img.pixel));
+  const B=tipBound(img,{halfAngle:cfg.halfAngle, reach});
+  const C=isFinite(B.R)?tipConsistent(B, img.pixel, cfg.tipRadius, cfg.halfAngle):null;
+  ST.afmTip={bound:B, consistent:C, set:{radius:cfg.tipRadius, halfAngle:cfg.halfAngle}};
+  const verdict=!isFinite(B.R)?`The image does not constrain the tip: no summit is prominent enough above the noise.`
+    : C.consistent?`The tip set in the panel, ${cfg.tipRadius} \u00C5, is consistent with the image.`
+    : `<b>The tip set in the panel, ${cfg.tipRadius} \u00C5, is blunter than this image allows.</b> At this cone angle its radius can be at most ${B.R.toFixed(1)} \u00C5; a blunter tip could not have produced features this sharp.`;
+  setPane("p-afm",`
+    <div class="stats">
+      <div class="stat"><b>${isFinite(B.R)?"\u2264 "+B.R.toFixed(1)+" \u00C5":"none"}</b><i>tip radius, at most</i></div>
+      <div class="stat"><b>${cfg.halfAngle}\u00B0</b><i>cone half-angle assumed</i></div>
+      <div class="stat"><b>${B.peaks}</b><i>summits used</i></div>
+      <div class="stat"><b>${B.sigma.toFixed(2)} \u00C5</b><i>noise, from the substrate</i></div>
+    </div>
+    <p class="sub">${verdict}</p>
+    <p class="sub">An image can never show a feature sharper than the tip that traced it, so around every summit
+    the image falls by no more than the tip rises. The largest fall over all prominent summits therefore bounds the
+    tip: the true tip is at least this sharp. The number above is an <b>upper bound</b> on the radius, not an estimate:
+    it is close to the truth only when the surface has features sharper than the tip, and with smooth, broad
+    features it can be far above it. It assumes the tip is a sphere joined to a cone of the stated half-angle.
+    To keep noise from implying a falsely sharp tip, each fall is reduced by an allowance of
+    ${B.allowance.toFixed(2)} \u00C5, enough to cover the largest of all the noise differences compared, and any
+    pixel within that of a summit's height is treated as a possible apex. More noise therefore loosens the bound;
+    it does not break it. This is the first step of Villarrubia's blind reconstruction; the further refinement that
+    can tighten it is not done here.</p>`);
+  goPane("p-afm");
+  log(`Tip bound: radius at most ${isFinite(B.R)?B.R.toFixed(1)+" \u00C5":"unconstrained"} at a ${cfg.halfAngle}\u00B0 cone, from ${B.peaks} summits. `+
+      (C?(C.consistent?"The tip set is consistent.":`The tip set (${cfg.tipRadius} \u00C5) is blunter than the image allows.`):""),
+      C&&!C.consistent?"warn":"ok");
+}
+$("#btnafmflex").onclick=()=>afmFlexRun().catch(e=>log("Flexible fit: "+e.message,"err")).finally(()=>busy(null));
+async function afmFlexRun(){
+  if(!ST.wt) throw new Error("flexible fitting needs a loaded structure, not a map");
+  if(!ST.afmFit||!ST.afmTarget) throw new Error("fit the orientation first");
+  const cfg={...afmConfig(), pixel:ST.afmTarget.pixel};
+  const modes=Math.max(1,Math.min(12,+$("#afmmodes").value||6)), strain=Math.max(0.1,+$("#afmstrain").value||0.6);
+  busy("Computing the network's softest modes\u2026"); await nextFrame();
+  const t0=performance.now();
+  const F=await flexFitAFM(ST.wt, ST.afmTarget, ST.afmFit.best.R, {...cfg, modes, maxStrain:strain},
+    async(n)=>{ if(n%20===0){ busy(`Flexible fit: ${n} evaluations\u2026`); await nextFrame(); } });
+  F.seconds=+((performance.now()-t0)/1000).toFixed(1);
+  ST.afmFlex=F;
+  const sim=simulateAFM(F.moved, ST.afmFit.best.R, cfg);
+  const gain=F.after.fit-F.before.fit;
+  setPane("p-afm",`
+    <div class="stats">
+      <div class="stat"><b>${F.before.fit.toFixed(3)} \u2192 ${F.after.fit.toFixed(3)}</b><i>match to the image (correlation less height mismatch)</i></div>
+      <div class="stat"><b>${F.rmsd.toFixed(2)} \u00C5</b><i>C\u03B1 displacement from the input model</i></div>
+      <div class="stat"><b>${F.geometry.worstCaSpacingChange.toFixed(2)} \u00C5</b><i>largest change in a C\u03B1 spacing (limit ${F.geometry.limit})</i></div>
+      <div class="stat"><b>${F.anm.N}</b><i>network beads${F.anm.stride>1?`, every ${F.anm.stride}th residue`:""}</i></div>
+    </div>
+    <p class="sub">The model was deformed along the ${F.anm.modes.length} softest modes of an anisotropic network
+    (springs between C\u03B1 atoms within ${F.anm.cfg.cutoff} \u00C5), starting from the rigid fit's orientation, to best
+    reproduce the measured topograph. A penalty that grows with each mode's stiffness keeps noise from being fitted by
+    stiff motions, and any deformation that changes a consecutive C\u03B1 spacing by more than ${F.geometry.limit} \u00C5 is
+    refused, since linear modes stretch the chain at large amplitudes.</p>
+    <table><thead><tr><th>Mode</th><th class="num">stiffness</th><th class="num">collectivity</th><th class="num">amplitude (\u00C5)</th></tr></thead><tbody>
+      ${F.anm.modes.map((m,k)=>`<tr><td>${k+1}</td><td class="num">${m.eigenvalue.toFixed(4)}</td><td class="num">${m.collectivity.toFixed(2)}</td>
+        <td class="num ${Math.abs(F.amplitudes[k])>0.05?"gaincell":""}">${F.amplitudes[k].toFixed(2)}</td></tr>`).join("")}</tbody></table>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div class="chartbox">${heightImageSVG(ST.afmTarget,{label:"measured",width:200})}</div>
+      <div class="chartbox">${heightImageSVG(sim,{label:"flexible fit",width:200})}</div>
+    </div>
+    <p class="sub"><b>What this can and cannot show.</b> A height image is blind to some motions, so different
+    combinations of modes can explain the same image equally well: the amplitudes above are one deformation consistent
+    with the image, not a measurement of how the molecule moved. ${gain<0.02?"The improvement here is small, and is within what fitting noise could produce. ":""}A better match
+    is not proof of a conformational change: test it against images not used in the fit, and against a rigid fit of an
+    alternative structure, before drawing a conclusion. Modes are linear, so this describes small departures from the
+    input model, not large rearrangements; and tip indentation, which lowers measured heights, is not modelled.</p>
+    <div class="row" style="margin-top:10px"><button id="afmflexsave">Save the deformed model as PDB</button></div>`);
+  goPane("p-afm");
+  $("#afmflexsave").onclick=()=>download((ST.name||"model").replace(/\.(pdb|cif|ent)$/i,"")+"_afm_flexible.pdb",
+    writePDB(buildStructure({atoms:ST.afmFlex.moved.map(a=>({...a})),ssbonds:[],links:[]})), "chemical/x-pdb");
+  log(`Flexible fit: match ${F.before.fit.toFixed(3)} \u2192 ${F.after.fit.toFixed(3)}, C\u03B1 moved ${F.rmsd.toFixed(2)} \u00C5 along `+
+      `${F.anm.modes.length} modes, ${F.evals} evaluations, ${F.seconds} s.`,"ok");
+}
+/* comparison of several structures against several images */
+$("#btnafmcmpS").onclick=()=>$("#afmcmpstructs").click();
+$("#btnafmcmpI").onclick=()=>$("#afmcmpimgs").click();
+const afmCmpReady=()=>{ $("#btnafmcmp").disabled=!((ST.afmCmpS||[]).length>=2&&(ST.afmCmpI||[]).length>=1); };
+$("#afmcmpstructs").onchange=async e=>{
+  ST.afmCmpS=[];
+  for(const f of e.target.files){
+    try{ const t=await f.text();
+      const S=/\.cif$/i.test(f.name)?buildStructure(parseCIF(t,{water:false,het:false,hydrogen:false}))
+                                    :buildStructure(parsePDB(t,{water:false,het:false,hydrogen:false}));
+      ST.afmCmpS.push({name:f.name, atoms:S.atoms.filter(a=>!a.water), key:(await digest(t)).value}); }
+    catch(err){ log(`AFM comparison: ${f.name} could not be read: ${err.message}`,"warn"); }
+  }
+  log(`AFM comparison: ${ST.afmCmpS.length} candidate structure(s) loaded.`,"ok"); afmCmpReady();
+};
+$("#afmcmpimgs").onchange=async e=>{
+  ST.afmCmpI=[];
+  for(const f of e.target.files){
+    try{ const txt=await f.text(), raw=parseHeightMatrix(txt,{pixel:+$("#afmexppixel").value||10, unit:+$("#afmunit").value||1});
+      ST.afmCmpI.push({name:f.name, raw, key:(await digest(txt)).value}); }
+    catch(err){ log(`AFM comparison: ${f.name} could not be read: ${err.message}`,"warn"); }
+  }
+  log(`AFM comparison: ${ST.afmCmpI.length} image(s) loaded.`,"ok"); afmCmpReady();
+};
+$("#btnafmcmp").onclick=()=>afmCompareRun().catch(e=>log("AFM comparison: "+e.message,"err")).finally(()=>busy(null));
+/* yield between fits without requestAnimationFrame, which browsers stop in hidden tabs; a
+   message channel is not throttled, so a long run continues when its tab is not in front */
+const yieldTask=()=>new Promise(r=>{ try{ const ch=new MessageChannel(); ch.port1.onmessage=()=>r(); ch.port2.postMessage(0); }
+  catch(e){ setTimeout(r,0); } });
+$("#btnafmcmpstop").onclick=()=>{ ST.afmCmpStopReq=true; $("#btnafmcmpstop").textContent="Stopping after the current fit\u2026"; };
+function afmCompareSummary(R){
+  const L=["The Protein Workbench: AFM comparison of candidate structures against images",""];
+  if(!R.complete) L.push(`STOPPED: ${R.cells.length} of ${R.total} fits done; the ranking uses only those.`,"");
+  L.push(`${R.ranking.length} structures x ${R.perImage.length} images, full orientation search, tolerance ${R.cfg.tolerance}.`,"","Ranking (images won, mean score):");
+  R.ranking.forEach((r,i)=>L.push(`  ${i+1}. ${r.structure}: ${r.wins} won, mean ${isFinite(r.meanScore)?r.meanScore.toFixed(3):"-"}`));
+  L.push("",`Images preferring no structure: ${R.perImage.filter(p=>!p.decided).length} of ${R.perImage.length}.`,"",
+    "A ranking says which candidate the images favour among those supplied; it cannot say any of them is right.");
+  return L.join("\n");
+}
+async function afmCompareRun(){
+  const S=ST.afmCmpS||[], I=(ST.afmCmpI||[]).map(x=>({name:x.name, key:x.key, img:prepareTopograph(x.raw, afmPrepCfg())}));
+  if(S.length<2||!I.length) throw new Error("load at least two candidate structures and one image");
+  const settings={...afmConfig(), prep:afmPrepCfg(), directions:80, spins:12, refine:8, tolerance:0.05};
+  const runKey="pw-afmcmp-"+(await digest(canonical({settings, s:S.map(x=>x.key), i:I.map(x=>x.key)}))).value.slice(0,32);
+  /* pairs finished in an earlier run of exactly these files and settings */
+  const done=new Map(); let store=true;
+  try{ const saved=JSON.parse(localStorage.getItem(runKey)||"[]"); saved.forEach(c=>done.set(c.key,c)); }
+  catch(e){ store=false; }
+  const saveCell=c=>{ if(!store) return; try{ const arr=JSON.parse(localStorage.getItem(runKey)||"[]"); arr.push(c);
+    localStorage.setItem(runKey, JSON.stringify(arr)); }catch(e){ store=false; log("AFM comparison: progress could not be saved in this browser; an interruption would lose it.","warn"); } };
+  /* keep the screen, and so the computer, awake if the browser allows it; ask once for a notification */
+  let lock=null; try{ if(navigator.wakeLock) lock=await navigator.wakeLock.request("screen"); }catch(e){}
+  try{ if(typeof Notification!=="undefined"&&Notification.permission==="default") Notification.requestPermission(); }catch(e){}
+  ST.afmCmpStopReq=false; $("#btnafmcmpstop").style.display=""; $("#btnafmcmpstop").textContent="Stop after the current fit";
+  if(done.size) log(`AFM comparison: resuming, ${done.size} of ${S.length*I.length} fits already done.`,"ok");
+  const t0=performance.now();
+  let R;
+  try{
+    R=await compareAFM(S, I, {...settings, done, onCell:saveCell, shouldStop:()=>ST.afmCmpStopReq},
+      async(n,tot,sn,iname)=>{ const el=(performance.now()-t0)/1000, fresh=Math.max(1,n-done.size);
+        busy(`Fitting ${sn} to ${iname} (${n+1} of ${tot})`+(n>done.size?`, about ${Math.round(el/fresh*(tot-n)/60)} min left`:"")+`\u2026`);
+        await yieldTask(); });
+  } finally {
+    $("#btnafmcmpstop").style.display="none";
+    try{ if(lock) await lock.release(); }catch(e){}
+  }
+  R.seconds=+((performance.now()-t0)/1000).toFixed(1); R.images=I; R.runKey=runKey; R.saved=store;
+  ST.afmCompare=R;
+  R.summaryText=afmCompareSummary(R);
+  try{ if(typeof Notification!=="undefined"&&Notification.permission==="granted")
+    new Notification(R.complete?"AFM comparison finished":"AFM comparison stopped",
+      {body:`${R.ranking[0].structure} wins ${R.ranking[0].wins} of ${I.length} images`+(R.complete?"":` (${R.cells.length} of ${R.total} fits done)`)}); }catch(e){}
+  const cell=(sn,iname)=>R.cells.find(c=>c.structure===sn&&c.image===iname);
+  setPane("p-afm",`
+    <div class="stats">
+      <div class="stat"><b>${S.length}</b><i>candidate structures</i></div>
+      <div class="stat"><b>${I.length}</b><i>images</i></div>
+      <div class="stat"><b>${R.perImage.filter(p=>p.decided).length}</b><i>images that prefer one structure</i></div>
+      <div class="stat"><b>${R.seconds} s</b><i>for ${R.cells.length} fits</i></div>
+    </div>
+    ${R.complete?"":`<p class="sub"><b>Stopped: ${R.cells.length} of ${R.total} fits done.</b> The ranking below uses only those.
+      Choose the same files and settings and run again to continue; nothing finished is repeated.</p>`}
+    ${R.resumed?`<p class="sub">${R.resumed} fits were taken from an earlier run of the same files and settings.</p>`:""}
+    <p class="sub">Each structure was fitted to each image with the full orientation search a single fit uses,
+    since a coarser search can miss a candidate's true orientation and rank a wrong structure confidently.
+    The score is the correlation less the normalised height mismatch. An image whose two best structures score
+    within ${R.cfg.tolerance} of each other does not prefer either, and is counted as a tie, not a win.</p>
+    <h3 style="font-size:13px;margin:12px 0 6px">Ranking</h3>
+    <table><thead><tr><th>Structure</th><th class="num">images won</th><th class="num">mean score</th></tr></thead><tbody>
+      ${R.ranking.map((r,i)=>`<tr><td>${i===0&&r.wins>0?"<b>":""}${esc(r.structure)}${i===0&&r.wins>0?"</b>":""}</td>
+        <td class="num">${r.wins}</td><td class="num">${r.meanScore.toFixed(3)}</td></tr>`).join("")}</tbody></table>
+    <h3 style="font-size:13px;margin:12px 0 6px">Score of each structure on each image</h3>
+    <table><thead><tr><th>Image</th>${S.map(x=>`<th class="num">${esc(x.name)}</th>`).join("")}<th>Preferred</th></tr></thead><tbody>
+      ${R.perImage.map(p=>`<tr><td>${esc(p.image)}</td>${S.map(x=>{ const c=cell(x.name,p.image);
+        /* a stopped run has pairs not yet fitted */
+        if(!c) return `<td class="num sub">\u2014</td>`;
+        return `<td class="num ${p.decided&&p.best===x.name?"gaincell":""}">${c.score.toFixed(3)}${c.degenerate?"*":""}</td>`; }).join("")}
+        <td class="sub">${!p.best?"not yet fitted":p.decided?`${esc(p.best)} by ${isFinite(p.margin)?p.margin.toFixed(3):"\u2014"}`:`none: within ${R.cfg.tolerance}`}</td></tr>`).join("")}
+    </tbody></table>
+    <p class="sub">* the orientation is not determined for that pair: other orientations fit about as well.
+    Images were prepared with the current settings before fitting. A ranking says which candidate the images
+    favour among those supplied; it cannot say that any of them is right, and heights below the simulated ones are
+    expected, since the tip presses into the molecule.</p>
+    <div class="row" style="margin-top:10px"><button id="afmcmpcsv">Save as CSV</button>
+      <button id="afmcmpmail">Write an email with the summary</button></div>
+    <p class="sub">The page cannot send email itself, since nothing leaves your computer: the button opens your mail
+    program with the summary written in, and the CSV must be attached by hand.</p>`);
+  goPane("p-afm");
+  $("#afmcmpcsv").onclick=()=>download("afm-comparison.csv",
+    ["structure,image,score,correlation,height_mismatch,orientation_determined"]
+      .concat(R.cells.map(c=>[c.structure,c.image,c.score.toFixed(4),c.cc.toFixed(4),c.nrms.toFixed(4),c.degenerate?"no":"yes"].join(","))).join("\n"),
+    "text/csv");
+  $("#afmcmpmail").onclick=()=>{ const subj=`Protein Workbench AFM comparison ${R.complete?"finished":"stopped"}: ${R.cells.length} of ${R.total} fits`;
+    window.location.href="mailto:?subject="+encodeURIComponent(subj)+"&body="+encodeURIComponent(R.summaryText.slice(0,1800)); };
+  log(`AFM comparison: ${R.ranking[0].structure} wins ${R.ranking[0].wins} of ${I.length} images; `+
+      `${R.perImage.filter(p=>!p.decided).length} image(s) prefer no structure. ${R.seconds} s.`,"ok");
+}
+
 $("#btnafmload").onclick=()=>$("#afmfile").click();
 $("#afmfile").onchange=async e=>{
   const f=e.target.files[0]; if(!f) return;
   try{
     const txt=await f.text();
-    ST.afmTarget=parseHeightMatrix(txt,{pixel:+$("#afmexppixel").value||10,
+    ST.afmRaw=parseHeightMatrix(txt,{pixel:+$("#afmexppixel").value||10,
       unit:+$("#afmunit").value||1});
-    ST.afmTarget.name=f.name;
-    $("#btnafmfit").disabled=false;
+    ST.afmRaw.name=f.name;
+    afmPrepare();
+    $("#btnafmfit").disabled=false; $("#btnafmtip").disabled=false;
     setPane("p-afm",`<p class="sub">Loaded ${esc(f.name)}: ${ST.afmTarget.nx} by ${ST.afmTarget.ny}
-      pixels at ${ST.afmTarget.pixel} \u00C5, ${(Math.max(...ST.afmTarget.z)).toFixed(1)} \u00C5 from the
-      lowest point to the highest. Check that the pixel size and height unit above are right, since
+      pixels at ${ST.afmTarget.pixel} \u00C5, ${(Math.max(...ST.afmTarget.z)).toFixed(1)} \u00C5 above the
+      substrate at its highest. Check that the pixel size and height unit above are right, since
       nothing in the file states them, and then fit.</p>
+      <p class="sub">${afmPrepNote(ST.afmTarget.prep)}</p>
       <div class="chartbox">${heightImageSVG(ST.afmTarget,{label:"measured"})}</div>`);
     goPane("p-afm");
     log(`AFM image loaded: ${ST.afmTarget.nx} \u00D7 ${ST.afmTarget.ny} pixels.`,"ok");
@@ -9107,14 +10524,13 @@ async function afmFit(){
   if(!ST.afmTarget) throw new Error("load a measured image first");
   const {atoms, source, radius}=afmAtoms();
   const cfg={...afmConfig(), pixel:ST.afmTarget.pixel};
-  const saved=VDW.C; if(radius) VDW.C=radius;
   busy("Searching orientations\u2026"); await nextFrame();
   const t0=performance.now();
   const F=await fitAFM(atoms, ST.afmTarget, {directions:80, spins:12, refine:8, ...cfg},
     async(i,n)=>{ if(i%10===0){ busy(`Orientation ${i} of ${n}\u2026`); await nextFrame(); } });
-  VDW.C=saved;
+
   const best=simulateAFM(atoms, F.best.R, cfg);
-  ST.afmFit=F;
+  ST.afmFit=F; $("#btnafmflex").disabled=!ST.wt;
   const diff={z:new Float32Array(ST.afmTarget.nx*ST.afmTarget.ny), nx:ST.afmTarget.nx,
     ny:ST.afmTarget.ny, pixel:ST.afmTarget.pixel};
   for(let i=0;i<diff.nx;i++)for(let j=0;j<diff.ny;j++){
@@ -10547,11 +11963,16 @@ function buildReportPDF(){
       `${ST.support.cfg.resolution} A is ${mean(rows.map(x=>x.rscc)).toFixed(3)}, and `+
       `${rows.filter(x=>x.rscc<0.6).length} residues fall below 0.6. `+
       `${weak.length} contacts rest on weak density and are listed below; a structural claim `+
-      `depending on them should carry that caveat.`,{});
-    d.plot({title:"Real-space correlation by residue", xLabel:"residue number",
-      yLabel:"correlation", yMin:0, yMax:1, series:[{name:"correlation",
+      `depending on them should carry that caveat.`+
+      (ST.support.q&&isFinite(ST.support.q.mean)?` The mean Q-score is ${ST.support.q.mean.toFixed(3)}, against about `+
+        `${expectedQ(ST.support.cfg.resolution).toFixed(2)} expected for a well-fitted model at that resolution.`:``),{});
+    const qRows=ST.support.q?rows.slice().sort((a,b)=>a.r.resi-b.r.resi)
+      .map(x=>({resi:x.r.resi, q:ST.support.q.perResidue.get(x.r.ridx)})).filter(x=>x.q&&isFinite(x.q.q)):[];
+    d.plot({title:"Real-space correlation and Q-score by residue", xLabel:"residue number",
+      yLabel:"score", yMin:0, yMax:1, series:(qRows.length?[{name:"Q-score", x:qRows.map(x=>x.resi),
+        y:qRows.map(x=>x.q.q), color:"0.88 0.54 0.18"}]:[]).concat([{name:"correlation",
         x:rows.slice().sort((a,b)=>a.r.resi-b.r.resi).map(x=>x.r.resi),
-        y:rows.slice().sort((a,b)=>a.r.resi-b.r.resi).map(x=>x.rscc)}]});
+        y:rows.slice().sort((a,b)=>a.r.resi-b.r.resi).map(x=>x.rscc)}])});
     if(weak.length) d.table(["Type","Partner 1","Partner 2","d (A)","Correlation"],
       cap(weak,15).map(c=>[TYPES[c.type].label,rl(ST.wt.residues[c.ri]),rl(ST.wt.residues[c.rj]),
         c.d.toFixed(2),c.rscc.toFixed(3)]),[2,2,2,1,1.2]);
@@ -10817,6 +12238,44 @@ function buildReportPDF(){
       Mx.clamp.slice(0,8).map(c=>[c.r.key, c.load.toFixed(2)]),[3,1.2]);
   }
 
+  if(ST.fit){
+    d.heading("Fit into the map",2);
+    const F=ST.fit, W=F.whole;
+    d.text(`The model was moved as a rigid body to where the map density at its atoms is highest: `+
+      `${W.moved.toFixed(2)} A overall, a rotation of ${W.rotation.toFixed(1)} degrees and a translation of `+
+      `${W.translation.toFixed(2)} A. The correlation between map and model at ${F.resolution} A went from `+
+      `${F.correlationBefore.toFixed(3)} to ${F.correlationAfter.toFixed(3)}. This refines a placement that was `+
+      `roughly right and cannot find one from nowhere.`+
+      (F.domainFits.length?` ${F.domainFits.length} domains, taken from the predicted aligned error, were then `+
+        `fitted separately.`:``),{});
+    if(F.domainFits.length) d.table(["Domain","Residues","Mean PAE (A)","Moved (A)","Rotation (deg)","Density (sigma)"],
+      F.domainFits.map(x=>[x.label,String(x.size),x.meanPAE.toFixed(1),x.moved.toFixed(2),x.rotation.toFixed(1),
+        `${x.sigmaBefore.toFixed(2)} to ${x.sigmaAfter.toFixed(2)}`]),[1,1,1.3,1.2,1.3,1.8]);
+    if(F.joins.length) d.text(`Peptide bonds between separately fitted parts: `+
+      F.joins.map(j=>`${j.from.key} to ${j.to.key}, ${j.distance.toFixed(2)} A`).join("; ")+`. A value far from `+
+      `1.33 A means the linker must be rebuilt before the model is used.`,{size:9});
+  }
+
+  if(ST.unex){
+    d.heading("Density the model does not explain",2);
+    const U=ST.unex;
+    d.text(`The model's density was simulated on the map's grid at ${U.resolution} A`+
+      (U.resolutionScan?`, the resolution at which it best matches the map`:``)+`, scaled to the map near the `+
+      `atoms (correlation ${U.scale.r.toFixed(3)}) and subtracted. ${(100*U.unexplainedFraction).toFixed(1)} per cent of `+
+      `the map's contrast near the model is left unexplained. ${U.positive.length} piece(s) of density the model does `+
+      `not account for, and ${U.negative.length} region(s) of model with nothing behind it, exceed `+
+      `${(U.threshold/U.sigmaD).toFixed(1)} times the spread of the difference and ${U.cfg.minVolume} A3. This cannot `+
+      `say what unexplained density is: a glycan, ligand, ion, misplaced side chain, unmodelled loop or partner `+
+      `subunit look alike here.`,{});
+    if(U.positive.length) d.table(["#","Volume (A3)","Peak (sigma)","From model (A)","Nearest residues"],
+      U.positive.slice(0,12).map((p,i)=>[String(i+1), p.volume.toFixed(0), p.peak.toFixed(1),
+        p.distanceFromModel.toFixed(1), p.residues.slice(0,4).map(x=>x.r.key).join(", ")+(p.glycanSite?" (sequon)":"")]),
+      [0.6,1.3,1.3,1.4,4]);
+    if(U.negative.length) d.table(["#","Volume (A3)","Depth (sigma)","Residues without density"],
+      U.negative.slice(0,10).map((p,i)=>[String(i+1), p.volume.toFixed(0), p.peak.toFixed(1),
+        p.residues.slice(0,5).map(x=>x.r.key).join(", ")]),[0.6,1.3,1.3,5]);
+  }
+
   if(ST.hotspots){
     d.heading("Binding hotspots",2);
     const H=ST.hotspots;
@@ -10879,6 +12338,28 @@ function buildReportPDF(){
     d.text(`Newick: ${newick(D2.tree)}`,{font:"F3",size:7.5});
   }
 
+  if(ST.afmFlex){
+    d.heading("Flexible fit to an AFM image",2);
+    const X=ST.afmFlex;
+    d.text(`The model was deformed along the ${X.anm.modes.length} softest modes of an anisotropic network to match `+
+      `the measured topograph, from the rigid fit's orientation, with no consecutive Calpha spacing changed by more `+
+      `than ${X.geometry.limit} A. The match went from ${X.before.fit.toFixed(3)} to ${X.after.fit.toFixed(3)} and the `+
+      `Calpha atoms moved ${X.rmsd.toFixed(2)} A. A height image is blind to some motions, so this is one deformation `+
+      `consistent with the image, not a measurement of how the molecule moved.`,{});
+    d.table(["Mode","Stiffness","Collectivity","Amplitude (A)"],X.anm.modes.map((m,k)=>[String(k+1),m.eigenvalue.toFixed(4),
+      m.collectivity.toFixed(2),X.amplitudes[k].toFixed(2)]),[1,1.4,1.4,1.4]);
+  }
+  if(ST.afmCompare){
+    d.heading("Candidate structures against AFM images",2);
+    const C=ST.afmCompare;
+    d.text(`${C.ranking.length} candidate structures were each fitted to ${C.perImage.length} measured images with `+
+      `the full orientation search. ${C.perImage.filter(p=>p.decided).length} images prefer one structure by at least `+
+      `${C.cfg.tolerance} in score; the rest prefer none. A ranking says which candidate the images favour among those `+
+      `supplied, not that any is right.`,{});
+    d.table(["Structure","Images won","Mean score"],C.ranking.map(r=>[r.structure,String(r.wins),r.meanScore.toFixed(3)]),[3,1.2,1.2]);
+    d.table(["Image","Preferred","Margin"],C.perImage.map(p=>[p.image,p.decided?p.best:"none",
+      isFinite(p.margin)?p.margin.toFixed(3):"-"]),[2.5,2.5,1]);
+  }
   if(ST.afm){
     d.heading("Atomic force microscopy",2);
     d.text(`A topograph was simulated from ${ST.afm.source} with a ${ST.afm.cfg.tipRadius} A tip `+
@@ -11126,6 +12607,36 @@ $("#btnreport").onclick=()=>{
       fluctuations:ST.gnm.K.beads.map((b,i)=>({residue:b.r.key,
         predicted:+ST.gnm.fl.scaled[i].toFixed(2),
         deposited:isFinite(ST.gnm.fl.obs[i])?+ST.gnm.fl.obs[i].toFixed(2):null}))}:null),
+    afmComparison: section("afmComparison", ()=> ST.afmCompare?{tolerance:ST.afmCompare.cfg.tolerance,
+      ranking:ST.afmCompare.ranking, perImage:ST.afmCompare.perImage, cells:ST.afmCompare.cells,
+      preparation:ST.afmCompare.images.map(x=>({image:x.name, ...x.img.prep, cfg:undefined}))}:null),
+    afmFlexibleFit: section("afmFlexibleFit", ()=> ST.afmFlex?{matchBefore:ST.afmFlex.before.fit, matchAfter:ST.afmFlex.after.fit,
+      calphaDisplacement:ST.afmFlex.rmsd, strainLimit:ST.afmFlex.geometry.limit, largestSpacingChange:ST.afmFlex.geometry.worstCaSpacingChange,
+      beads:ST.afmFlex.anm.N, cutoff:ST.afmFlex.anm.cfg.cutoff,
+      modes:ST.afmFlex.anm.modes.map((m,k)=>({mode:k+1, stiffness:m.eigenvalue, collectivity:m.collectivity, amplitude:ST.afmFlex.amplitudes[k]}))}:null),
+    afmTipBound: section("afmTipBound", ()=> ST.afmTip?{radiusAtMost:isFinite(ST.afmTip.bound.R)?+ST.afmTip.bound.R.toFixed(2):null,
+      halfAngleAssumed:ST.afmTip.set.halfAngle, summits:ST.afmTip.bound.peaks, noise:ST.afmTip.bound.sigma,
+      allowance:ST.afmTip.bound.allowance, tipSet:ST.afmTip.set.radius,
+      tipSetConsistent:ST.afmTip.consistent?ST.afmTip.consistent.consistent:null}:null),
+    afmPreparation: section("afmPreparation", ()=> ST.afmTarget&&ST.afmTarget.prep?{image:ST.afmTarget.name,
+      settings:ST.afmTarget.prep.cfg, spikes:ST.afmTarget.prep.spikes, orderUsed:ST.afmTarget.prep.orderUsed,
+      note:ST.afmTarget.prep.note, substrateFraction:ST.afmTarget.prep.background, tiltDegrees:ST.afmTarget.prep.tiltDegrees,
+      lineOffsetRange:ST.afmTarget.prep.lineOffsetRange, roughnessBefore:ST.afmTarget.prep.backgroundRmsBefore,
+      roughnessAfter:ST.afmTarget.prep.backgroundRmsAfter}:null),
+    fit: section("fit", ()=> ST.fit?{resolution:ST.fit.resolution, correlationBefore:ST.fit.correlationBefore,
+      correlationAfter:ST.fit.correlationAfter, moved:ST.fit.whole.moved, rotationDeg:ST.fit.whole.rotation,
+      translation:ST.fit.whole.translation, sigmaBefore:ST.fit.whole.sigmaBefore, sigmaAfter:ST.fit.whole.sigmaAfter,
+      domains:ST.fit.domainFits.map(d=>({label:d.label, size:d.size, meanPAE:d.meanPAE, moved:d.moved,
+        rotationDeg:d.rotation, sigmaBefore:d.sigmaBefore, sigmaAfter:d.sigmaAfter})),
+      joins:ST.fit.joins.map(j=>({from:j.from.key, to:j.to.key, distance:+j.distance.toFixed(3)}))}:null),
+    unexplained: section("unexplained", ()=> ST.unex?{resolution:ST.unex.resolution,
+      resolutionScan:ST.unex.resolutionScan, scale:ST.unex.scale, unexplainedFraction:ST.unex.unexplainedFraction,
+      level:ST.unex.cfg.level, minVolume:ST.unex.cfg.minVolume,
+      positive:ST.unex.positive.map(p=>({volume:+p.volume.toFixed(1), peakSigma:+p.peak.toFixed(2),
+        centroid:p.centroid, distanceFromModel:+p.distanceFromModel.toFixed(2), glycanSite:p.glycanSite,
+        residues:p.residues.map(x=>x.r.key)})),
+      negative:ST.unex.negative.map(p=>({volume:+p.volume.toFixed(1), depthSigma:+p.peak.toFixed(2),
+        residues:p.residues.map(x=>x.r.key)}))}:null),
     hotspots: section("hotspots", ()=> ST.hotspots?{chain:ST.hotspots.chain,
       considered:ST.hotspots.considered, usable:ST.hotspots.usable,
       interfaceEnergy:ST.hotspots.interfaceEnergy,
@@ -11261,9 +12772,15 @@ $("#btnreport").onclick=()=>{
         : {assembly:"deposited coordinates", chains:ST.wt.chains, atoms:ST.wt.atoms.length}),
     densitySupport: section("density", ()=>  ST.support?{coverage:+ST.support.coverage.toFixed(3),
       resolution:ST.support.cfg.resolution,
+      qScoreMean:ST.support.q&&isFinite(ST.support.q.mean)?+ST.support.q.mean.toFixed(4):null,
+      qScoreExpected:+expectedQ(ST.support.cfg.resolution).toFixed(3),
       residues:[...ST.support.perResidue.entries()].filter(([,v])=>isFinite(v.rscc))
-        .map(([ri,v])=>({residue:ST.wt.residues[ri].key, rscc:+v.rscc.toFixed(3),
-          z:isFinite(v.z)?+v.z.toFixed(2):null}))}:null),
+        .map(([ri,v])=>{ const q=ST.support.q&&ST.support.q.perResidue.get(ri);
+          return {residue:ST.wt.residues[ri].key, rscc:+v.rscc.toFixed(3),
+          z:isFinite(v.z)?+v.z.toFixed(2):null,
+          q:q&&isFinite(q.q)?+q.q.toFixed(4):null,
+          qBackbone:q&&isFinite(q.backbone)?+q.backbone.toFixed(4):null,
+          qSidechain:q&&isFinite(q.sidechain)?+q.sidechain.toFixed(4):null}; })}:null),
     crosslinkScreen: section("crosslink", ()=>  ST.xlink?{settings:ST.xlink.cfg, nGln:ST.xlink.nGln, nLys:ST.xlink.nLys,
       pairs:ST.xlink.pairs.map(p=>({gln:p.gln.key,lys:p.lys.key,tipEuclid:p.tipEuclid,
         tipSASD:p.tipSASD,competent:p.competent,inter:p.inter}))}:null),

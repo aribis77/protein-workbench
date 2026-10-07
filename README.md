@@ -54,7 +54,21 @@ fact constrain.
 relaxation, an empirical score for triage, conformational sampling in torsion space, and
 alchemical free energy by thermodynamic integration with Bennett's acceptance ratio on the
 same samples. Uncertainty comes from independent repeats rather than from block averaging
-within one run.
+within one run. Binding free energy uses the isolated chain as its reference, with an
+interface score that includes desolvation of the buried area, and a hotspot scan ranks the
+interface residues worth mutating on the bench, with each one's whole-structure cost and the
+reasons a residue should not be touched (disulfides, metal sites, crystal contacts, glycans).
+
+**Cryo-EM** — density support per residue and Q-scores per atom; density the model does not
+explain, and model with no density behind it, at a resolution found from the map; rigid fitting
+of a model into a map, or domain by domain for a predicted model using its predicted aligned
+error; and export of the map region around a model.
+
+**Atomic force microscopy** — preparation of measured topographs (spikes, tilt, scan-line
+offsets), fitting the orientation of a structure or a cryo-EM map to an image, an upper bound
+on the tip radius from the image itself, flexible fitting along the softest modes of an
+anisotropic network, and ranking many candidate structures against many images, also from the
+command line, resumable and in parallel.
 
 **Geometry** — solvent-accessible surface distances by Dijkstra search, which is the right
 measurement for crosslink restraints and reach; cavities by flood fill and pockets by
@@ -89,6 +103,11 @@ against its own output. Representative examples:
 | Poisson solver, charge in a sphere | q/(εr), analytic | within 1.1% |
 | Born radius, isolated atom | van der Waals radius, analytic | 1.696 Å against 1.700 Å |
 | AFM tip broadening | tip-centre locus, analytic | 80.6 Å against 80.6 Å |
+| AFM tip bound, features sharper than the tip | the true radius | 10.00, 20.00, 30.00 Å for 10, 20, 30 Å tips |
+| Anisotropic network modes | full eigendecomposition | eigenvalues within 3 × 10⁻¹¹ |
+| Contour of a Gaussian sphere | 4πr² | 156.2 against 156.8 Å² (−0.4%) |
+| Rigid fit, model turned 15° and moved 4.7 Å | its true place | 0.12 Å from it after fitting |
+| Q-score, atom in density of the reference shape | 1 | 0.978 mean over 556 atoms |
 | Neighbour joining, additive matrix | the tree it was built from | recovered exactly |
 | Disulfide design, 1A8O Cys198–Cys218 | deposited: 2.04 Å, 94.1° | modelled: 1.96 Å, 99.9° |
 
@@ -109,6 +128,14 @@ within a series are the defensible outputs rather than the absolute value. The e
 network is the isotropic form. Compressed XTC trajectories are not read; convert with
 `gmx trjconv` first.
 
+Map fitting is a local refinement from where the model starts, not a global search. The
+unexplained-density analysis compares the map with a density simulated from the model,
+including its B-factors, so a model whose B-factors do not describe the map can leave
+differences that are not missing atoms. AFM fitting models the tip's shape but not its force:
+real molecules are compressed and flattened on the surface, which lowers measured heights by an
+amount no setting here supplies, and the flexible fit can only follow motions the network's
+softest modes contain.
+
 The crosslink competence screen is a geometric filter: it establishes that a pair is not
 excluded by distance and burial, and says nothing about whether an enzyme would accept the
 site. The mechanical analysis is a ranking of susceptibility, not a force in piconewtons.
@@ -118,7 +145,7 @@ restated in the tool at the point where the result appears.
 ## Citing
 
 A manuscript is in preparation. Until it appears, please cite the archived software
-release: Biswas, A. *The Protein Workbench* (v1.0.1). Zenodo. https://doi.org/10.5281/zenodo.23021531
+release: Biswas, A. *The Protein Workbench* (v1.1.0). Zenodo. https://doi.org/10.5281/zenodo.23021531
 GitHub also renders `CITATION.cff` as a "Cite this repository" button.
 
 ## Licence
