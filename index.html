@@ -12953,6 +12953,11 @@ setPane("p-method",`
 
 /* General-purpose, opt-in URL handoff. No VWF-specific dependencies. */
 (async function receiveExternalStructureRequest(){
+  const showHandoffStatus=(message,isError=false)=>{
+    let el=document.getElementById('external-handoff-status');
+    if(!el){el=document.createElement('aside');el.id='external-handoff-status';el.setAttribute('role','status');el.style.cssText='position:sticky;top:0;z-index:9999;padding:15px 22px;font:600 16px system-ui;border-bottom:2px solid #64748b;background:#eff6ff;color:#172554';document.body.prepend(el);}
+    el.style.background=isError?'#fef2f2':'#eff6ff';el.style.color=isError?'#991b1b':'#172554';el.textContent=message;
+  };
   const q=new URLSearchParams(location.search);
   const pdb=(q.get('pdb')||'').trim().toUpperCase();
   const mutation=(q.get('mutation')||'').trim().toUpperCase();
@@ -12962,19 +12967,21 @@ setPane("p-method",`
   const match=mutation.match(/^([ACDEFGHIKLMNPQRSTVWY])([0-9]{1,5})([ACDEFGHIKLMNPQRSTVWY])$/);
   if(mutation&&!match){log('Invalid mutation parameter; expected H1786D format.','warn');return;}
   $('#pdbid').value=pdb;
+  showHandoffStatus('Loading '+pdb+' and preparing '+mutation+' for analysis…');
   await $('#btnfetch').onclick();
-  if(!ST.wt||!ST.name.toUpperCase().startsWith(pdb+'.')){log('Could not automatically load requested structure '+pdb+'.','warn');return;}
+  if(!ST.wt||!ST.name.toUpperCase().startsWith(pdb+'.')){showHandoffStatus('Automatic analysis stopped: structure '+pdb+' could not be loaded.',true);log('Could not automatically load requested structure '+pdb+'.','warn');return;}
   if(!match)return;
   const residue=Number(match[2]);
   const options=ST.wt.residues.filter(r=>r.std&&r.resi===residue&&(!chain||r.chain===chain));
   const aa=options.filter(r=>AA1[r.resn]===match[1]);
-  if(aa.length!==1){log('Mutation '+mutation+' could not be uniquely mapped to the loaded PDB residue numbering. Select the correct chain/residue manually; no mutation was performed.','warn');return;}
+  if(aa.length!==1){showHandoffStatus('Automatic analysis stopped: '+mutation+' uses UniProt numbering but no unique matching PDB residue was verified in '+pdb+'. No result was generated. Choose a structure with verified residue mapping.',true);log('Mutation '+mutation+' could not be uniquely mapped to the loaded PDB residue numbering. Select the correct chain/residue manually; no mutation was performed.','warn');return;}
   const site=aa[0];$('#mchain').value=site.chain;fillResidues();$('#mres').value=site.key;$('#mres').onchange();
   $('#mto').value=Object.keys(AA1).find(k=>AA1[k]===match[3])||'';
   log('Validated '+mutation+' on chain '+site.chain+' in '+pdb+'.','ok');
   const analysis=q.get('analysis')||'interface_contacts';
   if(!['interface_contacts','relative_binding_energy','conformational_sampling','conservation','combined'].includes(analysis))return;
   
+  showHandoffStatus('Validated '+mutation+' on chain '+site.chain+'. Running '+analysis+' analysis…');
   try{
     if(analysis!=='conservation'){await $('#btnanalyse').onclick();await runMutation();}
     if(analysis==='relative_binding_energy'||analysis==='combined'){
@@ -13051,10 +13058,11 @@ setPane("p-method",`
       const caveat=document.createElement('p');caveat.textContent='Research-only exploratory analysis. No calibrated functional-impact or clinical pathogenicity score. Verify structure identity and residue mapping.';panel.appendChild(caveat);
       const button=document.createElement('button');button.type='button';button.textContent='Download report JSON (optional)';button.onclick=()=>{const blob=new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),href=URL.createObjectURL(blob),a=document.createElement('a');a.href=href;a.download=pdb+'_'+mutation+'_mechanistic_report.json';a.click();setTimeout(()=>URL.revokeObjectURL(href),2000);};panel.appendChild(button);
       panel.scrollIntoView({behavior:'smooth',block:'start'});
+      showHandoffStatus('Analysis completed: view the structural report below or return to the KG tab.');
       log('Combined structural report displayed on page. JSON export is optional.','ok');
     }
     log('Automated structural handoff completed. Review the model, contact differences and any empirical energy scores before interpretation.','ok');
-  }catch(err){log('Automatic analysis could not finish: '+err.message,'err');}
+  }catch(err){showHandoffStatus('Automatic analysis failed: '+err.message,true);log('Automatic analysis could not finish: '+err.message,'err');}
 
 })();
 </script>
