@@ -963,6 +963,8 @@ END
 
       <div class="group">
         <div class="gtitle">13 &nbsp;Conservation</div>
+        <div class="row"><button id="btnautocons" class="primary">Automatic conservation (structure homologues)</button></div>
+        <div class="hint">Searches RCSB PDB for similar polymer sequences and constructs a query-anchored alignment. Experimental: structural coverage and taxonomic sampling may bias conservation. Network access required.</div>
         <div class="row"><button id="btnaln">Paste an alignment</button></div>
         <div id="alnwrap" style="display:none">
           <textarea id="alnbox" spellcheck="false" placeholder="FASTA or CLUSTAL, aligned sequences including this protein"
@@ -5972,6 +5974,51 @@ $("#btnplddt").onclick=()=>{
 /* ============================================================
    CONSERVATION DRIVER
    ============================================================ */
+
+/* Optional, standalone conservation discovery using RCSB sequence-search API.
+   Align each retrieved polymer to the query and project onto query columns.
+   This is a query-anchored homolog alignment, not a phylogenetic MSA. */
+async function automaticConservation(chain){
+  if(!ST.wt)throw Error('Load a structure first');
+  chain=chain||$('#mchain').value||ST.wt.chains[0];
+  const query=chainSequence(ST.wt,chain).codes;
+  if(query.length<25)throw Error('At least 25 standard residues required');
+  if(query.length>2500)throw Error('Chain exceeds the 2500-residue automatic-search limit');
+  busy('Searching RCSB for similar polymer sequences…');await nextFrame();
+  const payload={query:{type:'terminal',service:'sequence',parameters:{evalue_cutoff:0.001,identity_cutoff:0.25,target:'pdb_protein_sequence',value:query}},return_type:'polymer_entity',request_options:{paginate:{start:0,rows:35},scoring_strategy:'sequence'}};
+  const response=await fetch('https://search.rcsb.org/rcsbsearch/v2/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(!response.ok)throw Error('RCSB sequence search HTTP '+response.status);
+  const hits=(await response.json()).result_set||[];
+  const names=['query_'+chain],rows=[query],seen=new Set([query]);
+  for(const hit of hits.slice(0,30)){
+    const id=hit.identifier;
+    if(!/^[A-Za-z0-9]{4}_[0-9]+$/.test(id))continue;
+    try{
+      const r=await fetch('https://data.rcsb.org/rest/v1/core/polymer_entity/'+id.replace('_','/'));
+      if(!r.ok)continue;
+      const data=await r.json();
+      const seq=(data.entity_poly?.pdbx_seq_one_letter_code_can||'').replace(/[^A-Z]/gi,'').toUpperCase();
+      if(seq.length<25||seq.length>3000||seen.has(seq))continue;
+      const al=align(query,seq);
+      if(al.identity<0.25||al.matched<Math.min(25,query.length*0.5))continue;
+      const projected=Array(query.length).fill('-');
+      for(const [i,j] of al.pairs)if(i<query.length&&j<seq.length)projected[i]=seq[j];
+      const covered=projected.filter(x=>x!=='-').length;
+      if(covered/query.length<0.5)continue;
+      names.push(id);rows.push(projected.join(''));seen.add(seq);
+      if(rows.length>=21)break;
+    }catch(e){log('Skipped inaccessible homolog '+id+': '+e.message,'warn');}
+  }
+  if(rows.length<4)throw Error('Insufficient distinct structural homologues ('+(rows.length-1)+'); use a curated alignment instead');
+  $('#alnbox').value=names.map((name,i)=>'>'+name+'\n'+rows[i]).join('\n');
+  $('#alnchain').innerHTML='';
+  ST.wt.chains.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent='Chain '+c;$('#alnchain').appendChild(o);});
+  $('#alnchain').value=chain;
+  await conservationRun();
+  ST.conservation.automaticSource={provider:'RCSB PDB sequence search',method:'query-anchored pairwise projection',homologues:rows.length-1,limitations:'PDB selection bias; not a phylogenetic MSA; gaps and sequence redundancy may affect estimates'};
+  log('Automatic conservation used '+(rows.length-1)+' unique PDB homologues; verify taxonomic sampling and coverage.','warn');
+}
+$('#btnautocons').onclick=()=>automaticConservation().catch(e=>log('Automatic conservation unavailable: '+e.message,'warn')).finally(()=>busy(null));
 $("#btnaln").onclick=()=>{ const w=$("#alnwrap");
   w.style.display=w.style.display==="none"?"block":"none";
   if(w.style.display==="block"){
@@ -12927,7 +12974,7 @@ setPane("p-method",`
   log('Validated '+mutation+' on chain '+site.chain+' in '+pdb+'.','ok');
   const analysis=q.get('analysis')||'interface_contacts';
   if(!['interface_contacts','relative_binding_energy','conformational_sampling','conservation','combined'].includes(analysis))return;
-  if(analysis==='conservation'&&!q.get('alignment_url')){log('Sequence conservation requires an HTTPS alignment URL; no conservation calculation was launched.','warn');return;}
+  
   try{
     if(analysis!=='conservation'){await $('#btnanalyse').onclick();await runMutation();}
     if(analysis==='relative_binding_energy'||analysis==='combined'){
@@ -12955,7 +13002,7 @@ setPane("p-method",`
           $('#alnchain').value=site.chain;
           await conservationRun();
         }catch(e){log('Conservation not evaluated: '+e.message,'warn');}
-      }else log('Conservation not evaluated: a homologous multiple-sequence alignment URL was not provided.','warn');
+      }else {try{await automaticConservation(site.chain);}catch(e){log('Automatic conservation not evaluated: '+e.message,'warn');}}
     }
     if(analysis==='combined'){
       const status={contacts:!!ST.contactsWT,mutant:!!ST.mut,energetics:!!ST.energies,sampling:!!ST.sampling,conservation:!!ST.conservation};
