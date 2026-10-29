@@ -13012,6 +13012,15 @@ setPane("p-method",`
       const localCons=ST.conservation?.rows?.find(r=>r.r?.key===site.key)||null;
       const measured={contacts:contactCounts,conservation:localCons?{fraction:safeNumber(localCons.conservation),entropy:safeNumber(localCons.entropy),gap_fraction:safeNumber(localCons.gapFraction),consensus:localCons.consensus,sequence_count:ST.conservation.aln.seqs.length,alignment_identity:safeNumber(ST.conservation.M.identity),source:ST.conservation.automaticSource||'user-provided alignment'}:null,energetics:ST.energies?{wild_type:ST.energies.wt,mutant:ST.energies.mut,complex_wild_type:ST.energies.bindW,complex_mutant:ST.energies.bindM,method:'empirical scoring; not validated free energy'}:null,sampling:ST.sampling?{kind:ST.sampling.kind,method:ST.sampling.method,data:ST.sampling.data,settings:ST.sampling.cfg}:null};
       const result={schema:'protein-workbench-mechanistic-report/0.1',metrics:measured,created:new Date().toISOString(),pdb,mutation,chain:site.chain,analysis_status:status,conservation:ST.conservation?{sequence_count:ST.conservation.aln.seqs.length,alignment_identity:ST.conservation.M.identity}:null,sampling:ST.sampling?{method:ST.sampling.method,settings:ST.sampling.cfg}:null,interpretation:hypothesis,limitations:['Not experimental validation','Sampling is not production MD','Empirical scores are not binding free energies','Missing analyses are not inferred']};
+      // Optional authenticated-by-launch-token return to a separately opened KG tab.
+      // No KG dependency: standalone Workbench runs and local JSON export remain unchanged.
+      const returnOrigin=q.get('return_origin'),returnToken=q.get('return_token');
+      if(returnOrigin==='https://aribis77.github.io'&&/^[0-9a-f]{48}$/.test(returnToken||'')&&window.opener){
+        try{
+          window.opener.postMessage({type:'vwf-workbench-result/1',token:returnToken,report:result},returnOrigin);
+          log('Combined report sent to the originating KG tab (if still open).','ok');
+        }catch(e){log('KG return unavailable; local JSON export remains available: '+e.message,'warn');}
+      }
       const blob=new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),href=URL.createObjectURL(blob),a=document.createElement('a');a.href=href;a.download=pdb+'_'+mutation+'_mechanistic_report.json';a.click();setTimeout(()=>URL.revokeObjectURL(href),2000);
       log('Combined evidence-status report exported. Numerical mechanistic claims require expert review.','ok');
     }
