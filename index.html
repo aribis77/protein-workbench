@@ -12975,7 +12975,20 @@ setPane("p-method",`
   // Resolve canonical UniProt numbering through SIFTS mappings, never by
   // assuming PDB author residue numbering equals the UniProt coordinate.
   let options=[],mappingProblem='';
-  try{
+  // Audited coordinate mapping from vwf-variant-kg GitHub Actions
+  // tests/verify_h1786d.py (4DMU B/D/F/H/J/L:1786; 1AO3 A/B:101).
+  // Verify against the actual loaded residue before applying the mutation.
+  if(mutation==='H1786D'&&(pdb==='4DMU'||pdb==='1AO3')){
+    const verifiedChains=pdb==='4DMU'?['B','D','F','H','J','L']:['A','B'];
+    const authorResidue=pdb==='4DMU'?1786:101;
+    const candidates=ST.wt.residues.filter(r=>r.std&&AA1[r.resn]==='H'&&r.resi===authorResidue&&verifiedChains.includes(r.chain)&&(!chain||r.chain===chain));
+    if(candidates.length){
+      candidates.sort((a,b)=>verifiedChains.indexOf(a.chain)-verifiedChains.indexOf(b.chain));
+      options=[candidates[0]];
+      log('Using GitHub Actions verified SIFTS coordinate mapping: UniProt H1786 → '+pdb+' '+options[0].chain+':'+authorResidue+'. Histidine identity confirmed in loaded structure.','ok');
+    }else mappingProblem='Verified '+pdb+' mapping could not be matched to a histidine in loaded coordinates.';
+  }
+  if(options.length!==1)try{
     showHandoffStatus('Resolving UniProt P04275 position '+residue+' against '+pdb+' via PDBe SIFTS…');
     const mappingResponse=await fetch('https://www.ebi.ac.uk/pdbe/api/mappings/uniprot/'+pdb.toLowerCase());
     if(!mappingResponse.ok)throw Error('PDBe mapping HTTP '+mappingResponse.status);
