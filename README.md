@@ -170,3 +170,7 @@ GitHub also renders `CITATION.cff` as a "Cite this repository" button.
 
 MIT. The bundled rendering library, 3Dmol.js, is BSD-3-Clause and is redistributed under
 its own terms.
+
+### Quantitative combined export
+
+Combined analysis now exports a `metrics` object with detected contact-change counts, residue conservation/coverage where available, empirical energy-score objects and exploratory sampling results, alongside completion status. These are method-specific measurements, **not** validated binding free energies or pathogenicity probabilities. Review numerical output and provenance before publication. This change has not yet undergone end-to-end live-browser validation.
