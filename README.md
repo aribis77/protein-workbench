@@ -174,3 +174,7 @@ its own terms.
 ### Quantitative combined export
 
 Combined analysis now exports a `metrics` object with detected contact-change counts, residue conservation/coverage where available, empirical energy-score objects and exploratory sampling results, alongside completion status. These are method-specific measurements, **not** validated binding free energies or pathogenicity probabilities. Review numerical output and provenance before publication. This change has not yet undergone end-to-end live-browser validation.
+
+### Automatic KG result return (experimental)
+
+When Workbench is launched from the KG with a one-time random launch token and an approved return origin, its combined JSON report is sent back to the originating KG browser tab via `postMessage`. The KG validates the message origin, token, PDB and mutation before adding the result to its session-local variant report. Keep the KG tab open. This is a browser-to-browser handoff, not a server-side job queue or durable storage; it has not yet been validated in a live browser. Standalone Workbench remains independent and still exports JSON. Manual import/reset in the KG is under Advanced.
