@@ -13121,8 +13121,9 @@ setPane("p-method",`
         }catch(e){log('KG return unavailable: '+e.message,'warn');}
       }
       let panel=document.getElementById('automatic-mechanistic-report');
-      if(!panel){panel=document.createElement('section');panel.id='automatic-mechanistic-report';panel.style.cssText='max-width:1050px;margin:20px auto;padding:22px;border:1px solid #94a3b8;border-radius:12px;background:#fff;color:#172033;position:relative;z-index:5';document.body.appendChild(panel);}
+      if(!panel){panel=document.createElement('section');panel.id='automatic-mechanistic-report';panel.style.cssText='position:fixed;right:14px;bottom:14px;z-index:900;max-width:min(440px,calc(100vw - 28px));max-height:55vh;overflow:auto;padding:14px;border:1px solid #94a3b8;border-radius:12px;background:#fff;color:#172033;box-shadow:0 8px 30px #0003;font:13px system-ui';document.body.appendChild(panel);}
       panel.replaceChildren();
+      const collapse=document.createElement('button');collapse.type='button';collapse.textContent='Hide summary';collapse.style.cssText='float:right;margin-left:8px';collapse.onclick=()=>{panel.hidden=true;showHandoffStatus('Report summary hidden; structural viewer is available.');};panel.appendChild(collapse);
       const h=document.createElement('h2');h.textContent='Structural analysis report · '+pdb+' · '+mutation;panel.appendChild(h);
       const note=document.createElement('p');note.textContent=delivered?'Results sent to the originating KG tab. This local summary remains available here.':'Results are shown here. No JSON download is required.';panel.appendChild(note);
       const metrics=result.metrics||{};
@@ -13137,8 +13138,8 @@ setPane("p-method",`
       for(const [label,value] of entries){const tr=document.createElement('tr'),th=document.createElement('th'),td=document.createElement('td');th.textContent=label;td.textContent=value;th.style.cssText='text-align:left;padding:10px;border-bottom:1px solid #ddd';td.style.cssText='padding:10px;border-bottom:1px solid #ddd';tr.append(th,td);table.appendChild(tr);}panel.appendChild(table);
       const caveat=document.createElement('p');caveat.textContent='Research-only exploratory analysis. No calibrated functional-impact or clinical pathogenicity score. Verify structure identity and residue mapping.';panel.appendChild(caveat);
       const button=document.createElement('button');button.type='button';button.textContent='Download report JSON (optional)';button.onclick=()=>{const blob=new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),href=URL.createObjectURL(blob),a=document.createElement('a');a.href=href;a.download=pdb+'_'+mutation+'_mechanistic_report.json';a.click();setTimeout(()=>URL.revokeObjectURL(href),2000);};panel.appendChild(button);
-      panel.scrollIntoView({behavior:'smooth',block:'start'});
-      showHandoffStatus('Analysis completed: view the structural report below or return to the KG tab.');
+      
+      showHandoffStatus(delivered?'Analysis completed and sent to the KG tab. Structural viewer remains available.':'Analysis completed. A compact report is available at bottom right; return to the KG tab for integration.');
       log('Combined structural report displayed on page. JSON export is optional.','ok');
     }
     log('Automated structural handoff completed. Review the model, contact differences and any empirical energy scores before interpretation.','ok');
