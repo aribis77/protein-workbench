@@ -3,12 +3,30 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23021531.svg)](https://doi.org/10.5281/zenodo.23021531)
 
 A structural analysis workbench that runs entirely in a browser. One self-contained
-HTML file: no installation, no server, no account, and no coordinates ever leave the
-machine it is opened on.
+HTML file: no installation, no server, no account, and coordinates are processed locally unless the user explicitly uses a remote retrieval feature.
 
 **Live: https://aribis77.github.io/protein-workbench/**
 
 ---
+
+
+## URL-based integration with external knowledge graphs (experimental)
+
+Protein Workbench remains a **general-purpose, independent browser application**. An external knowledge graph or analysis portal can open it with a structure accession and a protein substitution:
+
+```text
+https://aribis77.github.io/protein-workbench/?pdb=1ABC&mutation=H1786D&chain=A&analysis=combined
+```
+
+The PDB ID above is **illustrative, not a validated structure for H1786D**. Replace it with a suitable experimentally supported structure and verify that the mutation's residue number and wild-type identity match the structure. The optional `chain` parameter disambiguates chains. `analysis` accepts `interface_contacts`, `relative_binding_energy`, `conformational_sampling`, `conservation`, or `combined`. The optional `alignment_url` parameter accepts an HTTPS URL to an accessible FASTA/CLUSTAL **multiple-sequence alignment**. Remote loading depends on the host's cross-origin policy; no sequence database search or MSA construction is performed automatically.
+
+After a successful PDB fetch and unambiguous residue mapping, the current integration can run contact mapping and mutant construction, empirical energy scoring for the relevant modes, and a **quick exploratory ensemble** for sampling/combined mode. Conservation uses the existing alignment engine only when an alignment is supplied. Combined mode downloads a machine-readable **analysis-status report**, not a validated, evidence-weighted causal mechanism or an automatically curated KG record. Results are not currently synchronized back into the originating KG.
+
+**Scientific limits:** A PDB residue number is not necessarily a full-length protein sequence number; ambiguous mappings stop the automatic workflow. Empirical scores are not rigorous binding free energies. The quick ensemble is not production molecular dynamics. Alignment composition, redundancy, coverage and mapping determine conservation reliability. Missing components must be reported as not evaluated. Always review output and provenance before using it in a manuscript.
+
+**Privacy and networking:** Local coordinate analysis remains browser-side, but using a PDB accession or an `alignment_url` makes the browser request public remote resources. URLs may be visible to the hosting and resource servers. Do not include confidential sequences or private identifiers in query parameters.
+
+**Current status:** GitHub code committed; this URL-driven integration has not yet passed an independently documented end-to-end browser test. It is an experimental interface, not a stable public API.
 
 ## What it is for
 
