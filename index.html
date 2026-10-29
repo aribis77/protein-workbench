@@ -13072,12 +13072,12 @@ setPane("p-method",`
   $('#mto').value=Object.keys(AA1).find(k=>AA1[k]===match[3])||'';
   log('Validated '+mutation+' on chain '+site.chain+' in '+pdb+'.','ok');
   const analysis=q.get('analysis')||'interface_contacts';
-  if(!['interface_contacts','relative_binding_energy','conformational_sampling','conservation','combined'].includes(analysis))return;
+  if(!['interface_contacts','relative_binding_energy','conformational_sampling','conservation','combined','kg_integrated'].includes(analysis))return;
   
   showHandoffStatus('Validated '+mutation+' on chain '+site.chain+'. Running '+analysis+' analysis…');
   try{
     if(analysis!=='conservation'){await $('#btnanalyse').onclick();await runMutation();}
-    if(analysis==='relative_binding_energy'||analysis==='combined'){
+    if(analysis==='relative_binding_energy'||analysis==='combined'||analysis==='kg_integrated'){
       if(!$('#btnenergy').disabled)await $('#btnenergy').onclick();
     }
     if(analysis==='conformational_sampling'||analysis==='combined'){
@@ -13086,7 +13086,7 @@ setPane("p-method",`
       await runSampled();
       log('Ensemble conformational sampling completed using the quick preset. This is exploratory, not validated molecular dynamics.','warn');
     }
-    if(analysis==='combined'||analysis==='conservation'){
+    if(analysis==='combined'||analysis==='conservation'||analysis==='kg_integrated'){
       const alignment=q.get('alignment_url');
       if(alignment){
         try{
@@ -13104,10 +13104,10 @@ setPane("p-method",`
         }catch(e){log('Conservation not evaluated: '+e.message,'warn');}
       }else {try{await automaticConservation(site.chain);}catch(e){log('Automatic conservation not evaluated: '+e.message,'warn');}}
     }
-    if(analysis==='combined'){
+    if(analysis==='combined'||analysis==='kg_integrated'){
       const status={contacts:!!ST.contactsWT,mutant:!!ST.mut,energetics:!!ST.energies,sampling:!!ST.sampling,conservation:!!ST.conservation};
       if(!status.mutant||!ST.mutInfo){showHandoffStatus('Analysis incomplete: no mutant coordinates were produced. No integrated result was sent.',true);return;}
-      const hypothesis='Structural contact and conformational predictions are hypotheses; review residue-local changes, alignment coverage, model provenance and experimental KG evidence before drawing a mechanism.';
+      const hypothesis='Structural contact and energetic predictions are hypotheses; review residue-local changes, alignment coverage, model provenance and experimental KG evidence before drawing a mechanism.';
       const safeNumber=x=>typeof x==='number'&&Number.isFinite(x)?x:null;
       const contactCounts=ST.diff?{lost:ST.diff.lost.length,gained:ST.diff.gained.length,kept:ST.diff.kept.length}:null;
       if(!contactCounts||!Object.values(contactCounts).every(Number.isFinite)){
