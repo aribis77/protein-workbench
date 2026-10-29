@@ -13113,6 +13113,13 @@ setPane("p-method",`
       }
 
       const returnOrigin=q.get('return_origin'),returnToken=q.get('return_token');
+      // Durable same-origin return for KG tabs that were inactive when the broadcast fired.
+      if(returnOrigin==='https://aribis77.github.io'&&/^[0-9a-f]{48}$/.test(returnToken||'')){
+        try{
+          localStorage.setItem('vwf-workbench-result-v1',JSON.stringify({type:'vwf-workbench-result/1',token:returnToken,report:result}));
+          delivered=true;
+        }catch(e){log('Local KG return fallback unavailable: '+e.message,'warn');}
+      }
       if(returnOrigin==='https://aribis77.github.io'&&/^[0-9a-f]{48}$/.test(returnToken||'')&&window.opener){
         try{
           window.opener.postMessage({type:'vwf-workbench-result/1',token:returnToken,report:result},returnOrigin);
