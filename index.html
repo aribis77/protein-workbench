@@ -13078,7 +13078,7 @@ setPane("p-method",`
   try{
     if(analysis!=='conservation'){await $('#btnanalyse').onclick();await runMutation();}
     if(analysis==='relative_binding_energy'||analysis==='combined'||analysis==='kg_integrated'){
-      if(!$('#btnenergy').disabled)await $('#btnenergy').onclick();
+      if(!$('#btnenergy').disabled)await $('#btnenergy').onclick(); else log('Energetic scoring unavailable: the Workbench energy control is disabled.','warn');
     }
     if(analysis==='conformational_sampling'||analysis==='combined'){
       $('#femethod').value='ensemble';
@@ -13107,6 +13107,8 @@ setPane("p-method",`
     if(analysis==='combined'||analysis==='kg_integrated'){
       const status={contacts:!!ST.contactsWT,mutant:!!ST.mut,energetics:!!ST.energies,sampling:!!ST.sampling,conservation:!!ST.conservation};
       if(!status.mutant||!ST.mutInfo){showHandoffStatus('Analysis incomplete: no mutant coordinates were produced. No integrated result was sent.',true);return;}
+      if(analysis==='kg_integrated'&&!status.energetics){log('Empirical energy calculation did not return a result; report will explicitly mark energetics unavailable.','warn');}
+      if(analysis==='kg_integrated'&&!status.conservation){log('Conservation calculation did not return a result; report will explicitly mark conservation unavailable.','warn');}
       const hypothesis='Structural contact and energetic predictions are hypotheses; review residue-local changes, alignment coverage, model provenance and experimental KG evidence before drawing a mechanism.';
       const safeNumber=x=>typeof x==='number'&&Number.isFinite(x)?x:null;
       const contactCounts=ST.diff?{lost:ST.diff.lost.length,gained:ST.diff.gained.length,kept:ST.diff.kept.length}:null;
@@ -13117,7 +13119,7 @@ setPane("p-method",`
       }
       const localCons=ST.conservation?.rows?.find(r=>r.r?.key===site.key)||null;
       const measured={contacts:contactCounts,conservation:localCons?{fraction:safeNumber(localCons.conservation),entropy:safeNumber(localCons.entropy),gap_fraction:safeNumber(localCons.gapFraction),consensus:localCons.consensus,sequence_count:ST.conservation.aln.seqs.length,alignment_identity:safeNumber(ST.conservation.M.identity),source:ST.conservation.automaticSource||'user-provided alignment'}:null,energetics:ST.energies?{wild_type:ST.energies.wt,mutant:ST.energies.mut,complex_wild_type:ST.energies.bindW,complex_mutant:ST.energies.bindM,method:'empirical scoring; not validated free energy'}:null,sampling:ST.sampling?{kind:ST.sampling.kind,method:ST.sampling.method,data:ST.sampling.data,settings:ST.sampling.cfg}:null};
-      const result={schema:'protein-workbench-mechanistic-report/0.1',metrics:measured,created:new Date().toISOString(),pdb,mutation,chain:site.chain,coordinate_mapping:{uniprot:'P04275',uniprot_position:residue,pdb_author_residue:site.resi,wild_type:match[1],mutant:match[3],verified_in_loaded_coordinates:AA1[site.resn]===match[1],source:mutation==='H1786D'&&['4DMU','1AO3'].includes(pdb)?'GitHub Actions SIFTS-to-PDB ATOM validation plus loaded-coordinate identity':'Workbench runtime SIFTS/sequence alignment'},analysis_status:status,conservation:ST.conservation?{sequence_count:ST.conservation.aln.seqs.length,alignment_identity:ST.conservation.M.identity}:null,sampling:ST.sampling?{method:ST.sampling.method,settings:ST.sampling.cfg}:null,interpretation:hypothesis,limitations:['Not experimental validation','Sampling is not production MD','Empirical scores are not binding free energies','Missing analyses are not inferred']};
+      const result={schema:'protein-workbench-mechanistic-report/0.1',metrics:measured,created:new Date().toISOString(),pdb,mutation,chain:site.chain,coordinate_mapping:{uniprot:'P04275',uniprot_position:residue,pdb_author_residue:site.resi,wild_type:match[1],mutant:match[3],verified_in_loaded_coordinates:AA1[site.resn]===match[1],source:mutation==='H1786D'&&['4DMU','1AO3'].includes(pdb)?'GitHub Actions SIFTS-to-PDB ATOM validation plus loaded-coordinate identity':'Workbench runtime SIFTS/sequence alignment'},analysis_status:status,analysis_mode:analysis,conservation:ST.conservation?{sequence_count:ST.conservation.aln.seqs.length,alignment_identity:ST.conservation.M.identity}:null,sampling:ST.sampling?{method:ST.sampling.method,settings:ST.sampling.cfg}:null,interpretation:hypothesis,limitations:['Not experimental validation','Sampling is not production MD','Empirical scores are not binding free energies','Missing analyses are not inferred']};
       // Display a readable report by default; JSON is an optional explicit export.
       let delivered=false;
       // BroadcastChannel works across the two GitHub Pages paths even if the
