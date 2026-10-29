@@ -12903,6 +12903,29 @@ setPane("p-method",`
       "Pasting and the example need no file access and no network, so they work even "+
       "inside a restricted viewer. Exports appear in the Export tab as copyable text.");
 })();
+
+/* General-purpose, opt-in URL handoff. No VWF-specific dependencies. */
+(async function receiveExternalStructureRequest(){
+  const q=new URLSearchParams(location.search);
+  const pdb=(q.get('pdb')||'').trim().toUpperCase();
+  const mutation=(q.get('mutation')||'').trim().toUpperCase();
+  const chain=(q.get('chain')||'').trim();
+  if(!pdb&&!mutation)return;
+  if(!/^[A-Z0-9]{4}$/.test(pdb)){log('A valid four-character PDB ID is required for automatic loading.','warn');return;}
+  const match=mutation.match(/^([ACDEFGHIKLMNPQRSTVWY])([0-9]{1,5})([ACDEFGHIKLMNPQRSTVWY])$/);
+  if(mutation&&!match){log('Invalid mutation parameter; expected H1786D format.','warn');return;}
+  $('#pdbid').value=pdb;
+  await $('#btnfetch').onclick();
+  if(!ST.wt||!ST.name.toUpperCase().startsWith(pdb+'.')){log('Could not automatically load requested structure '+pdb+'.','warn');return;}
+  if(!match)return;
+  const residue=Number(match[2]);
+  const options=ST.wt.residues.filter(r=>r.std&&r.resi===residue&&(!chain||r.chain===chain));
+  const aa=options.filter(r=>AA1[r.resn]===match[1]);
+  if(aa.length!==1){log('Mutation '+mutation+' could not be uniquely mapped to the loaded PDB residue numbering. Select the correct chain/residue manually; no mutation was performed.','warn');return;}
+  const site=aa[0];$('#mchain').value=site.chain;fillResidues();$('#mres').value=site.key;$('#mres').onchange();
+  $('#mto').value=Object.keys(AA1).find(k=>AA1[k]===match[3])||'';
+  log('Prepared '+mutation+' on chain '+site.chain+' in '+pdb+'. Review the residue mapping, then choose Build and relax mutant.','ok');
+})();
 </script>
 </body>
 </html>
