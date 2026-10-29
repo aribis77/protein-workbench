@@ -12997,6 +12997,48 @@ setPane("p-method",`
     if(!regions.length)mappingProblem='PDB '+pdb+' does not map to canonical VWF residue '+residue+'.';
     else if(options.length!==1)mappingProblem='SIFTS maps the position, but a unique matching histidine was not found in loaded atomic coordinates.';
   }catch(e){mappingProblem=e.message;}
+  // Sequence-based fallback: author/label numbering and missing residues can
+  // invalidate a simple SIFTS start+offset calculation. Match a unique local
+  // UniProt sequence window to the loaded chain's observed residues instead.
+  if(options.length!==1){
+    try{
+      const u=await fetch('https://rest.uniprot.org/uniprotkb/P04275.fasta');
+      if(!u.ok)throw Error('UniProt FASTA HTTP '+u.status);
+      const fasta=await u.text(),seq=fasta.split(/\r?\n/).slice(1).join('').trim().toUpperCase();
+      if(seq[residue-1]!==match[1])throw Error('Reference amino acid mismatch at UniProt position '+residue);
+      const chainIDs=[...new Set(ST.wt.residues.filter(r=>r.std&&AA1[r.resn]).map(r=>r.chain))].filter(c=>!chain||c===chain);
+      const matches=[];
+      for(const c of chainIDs){
+        const residues=ST.wt.residues.filter(r=>r.std&&r.chain===c&&AA1[r.resn]);
+        const chainSeq=residues.map(r=>AA1[r.resn]).join('');
+        for(const radius of [12,9,6]){
+          const lo=Math.max(0,residue-1-radius),hi=Math.min(seq.length,residue+radius);
+          const motif=seq.slice(lo,hi),center=residue-1-lo;
+          if(motif.length<9)continue;
+          let at=chainSeq.indexOf(motif);
+          while(at!==-1){
+            const site=residues[at+center];
+            if(site&&AA1[site.resn]===match[1])matches.push({site,chain:c,radius});
+            at=chainSeq.indexOf(motif,at+1);
+          }
+          if(matches.some(x=>x.chain===c))break;
+        }
+      }
+      const unique=[...new Map(matches.map(x=>[x.site.key,x.site])).values()];
+      if(unique.length){
+        options=unique;
+        mappingProblem='Verified by unique UniProt sequence-window alignment in loaded coordinates; numbering offsets were not assumed.';
+      }else mappingProblem+=' Sequence-window alignment found no matching resolved residue.';
+    }catch(e){mappingProblem+=' Sequence fallback: '+e.message;}
+  }
+  // Equivalent copies of a homomer may map to the same UniProt site.
+  // Use a deterministic chain only when each candidate is sequence-verified.
+  if(options.length>1&&!chain){
+    options.sort((a,b)=>a.chain.localeCompare(b.chain)||a.resi-b.resi);
+    const chosen=options[0];
+    log('Multiple sequence-matched copies of the same VWF position; using chain '+chosen.chain+'. Specify ?chain= to select another copy.','warn');
+    options=[chosen];
+  }
   const aa=options;
   if(aa.length!==1){showHandoffStatus('Automatic analysis stopped: '+mappingProblem+' No mutation or mechanistic result was generated.',true);log('Mapping verification failed: '+mappingProblem,'warn');return;}
   const site=aa[0];$('#mchain').value=site.chain;fillResidues();$('#mres').value=site.key;$('#mres').onchange();
