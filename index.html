@@ -5985,7 +5985,7 @@ async function automaticConservation(chain){
   if(query.length<25)throw Error('At least 25 standard residues required');
   if(query.length>2500)throw Error('Chain exceeds the 2500-residue automatic-search limit');
   busy('Searching RCSB for similar polymer sequences…');await nextFrame();
-  const payload={query:{type:'terminal',service:'sequence',parameters:{evalue_cutoff:0.001,identity_cutoff:0.25,target:'pdb_protein_sequence',value:query}},return_type:'polymer_entity',request_options:{paginate:{start:0,rows:35},scoring_strategy:'sequence'}};
+  const payload={query:{type:'terminal',service:'sequence',parameters:{evalue_cutoff:0.001,identity_cutoff:0.25,target:'pdb_protein_sequence',value:query}},return_type:'polymer_entity',request_options:{paginate:{start:0,rows:35}}};
   const response=await fetch('https://search.rcsb.org/rcsbsearch/v2/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   if(!response.ok)throw Error('RCSB sequence search HTTP '+response.status);
   const hits=(await response.json()).result_set||[];
