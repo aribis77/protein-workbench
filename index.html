@@ -12972,9 +12972,33 @@ setPane("p-method",`
   if(!ST.wt||!ST.name.toUpperCase().startsWith(pdb+'.')){showHandoffStatus('Automatic analysis stopped: structure '+pdb+' could not be loaded.',true);log('Could not automatically load requested structure '+pdb+'.','warn');return;}
   if(!match)return;
   const residue=Number(match[2]);
-  const options=ST.wt.residues.filter(r=>r.std&&r.resi===residue&&(!chain||r.chain===chain));
-  const aa=options.filter(r=>AA1[r.resn]===match[1]);
-  if(aa.length!==1){showHandoffStatus('Automatic analysis stopped: '+mutation+' uses UniProt numbering but no unique matching PDB residue was verified in '+pdb+'. No result was generated. Choose a structure with verified residue mapping.',true);log('Mutation '+mutation+' could not be uniquely mapped to the loaded PDB residue numbering. Select the correct chain/residue manually; no mutation was performed.','warn');return;}
+  // Resolve canonical UniProt numbering through SIFTS mappings, never by
+  // assuming PDB author residue numbering equals the UniProt coordinate.
+  let options=[],mappingProblem='';
+  try{
+    showHandoffStatus('Resolving UniProt P04275 position '+residue+' against '+pdb+' via PDBe SIFTS…');
+    const mappingResponse=await fetch('https://www.ebi.ac.uk/pdbe/api/mappings/uniprot/'+pdb.toLowerCase());
+    if(!mappingResponse.ok)throw Error('PDBe mapping HTTP '+mappingResponse.status);
+    const mappingData=await mappingResponse.json();
+    const uniprot=mappingData[pdb.toLowerCase()]?.UniProt?.P04275;
+    if(!uniprot)throw Error('No canonical VWF UniProt P04275 mapping for '+pdb);
+    const regions=(uniprot.mappings||[]).filter(m=>m.unp_start<=residue&&m.unp_end>=residue&&(!chain||m.chain_id===chain||m.struct_asym_id===chain));
+    for(const m of regions){
+      const pdbRes=Number(m.start?.residue_number)+(residue-Number(m.unp_start));
+      const pdbAuth=Number(m.start?.author_residue_number)+(residue-Number(m.unp_start));
+      for(const r of ST.wt.residues){
+        if(!r.std||AA1[r.resn]!==match[1])continue;
+        if(chain&&r.chain!==chain)continue;
+        if(m.chain_id&&r.chain!==m.chain_id&&r.chain!==m.struct_asym_id)continue;
+        if(r.resi===pdbRes||r.resi===pdbAuth)options.push(r);
+      }
+    }
+    options=[...new Map(options.map(r=>[r.key,r])).values()];
+    if(!regions.length)mappingProblem='PDB '+pdb+' does not map to canonical VWF residue '+residue+'.';
+    else if(options.length!==1)mappingProblem='SIFTS maps the position, but a unique matching histidine was not found in loaded atomic coordinates.';
+  }catch(e){mappingProblem=e.message;}
+  const aa=options;
+  if(aa.length!==1){showHandoffStatus('Automatic analysis stopped: '+mappingProblem+' No mutation or mechanistic result was generated.',true);log('Mapping verification failed: '+mappingProblem,'warn');return;}
   const site=aa[0];$('#mchain').value=site.chain;fillResidues();$('#mres').value=site.key;$('#mres').onchange();
   $('#mto').value=Object.keys(AA1).find(k=>AA1[k]===match[3])||'';
   log('Validated '+mutation+' on chain '+site.chain+' in '+pdb+'.','ok');
