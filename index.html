@@ -13012,17 +13012,35 @@ setPane("p-method",`
       const localCons=ST.conservation?.rows?.find(r=>r.r?.key===site.key)||null;
       const measured={contacts:contactCounts,conservation:localCons?{fraction:safeNumber(localCons.conservation),entropy:safeNumber(localCons.entropy),gap_fraction:safeNumber(localCons.gapFraction),consensus:localCons.consensus,sequence_count:ST.conservation.aln.seqs.length,alignment_identity:safeNumber(ST.conservation.M.identity),source:ST.conservation.automaticSource||'user-provided alignment'}:null,energetics:ST.energies?{wild_type:ST.energies.wt,mutant:ST.energies.mut,complex_wild_type:ST.energies.bindW,complex_mutant:ST.energies.bindM,method:'empirical scoring; not validated free energy'}:null,sampling:ST.sampling?{kind:ST.sampling.kind,method:ST.sampling.method,data:ST.sampling.data,settings:ST.sampling.cfg}:null};
       const result={schema:'protein-workbench-mechanistic-report/0.1',metrics:measured,created:new Date().toISOString(),pdb,mutation,chain:site.chain,analysis_status:status,conservation:ST.conservation?{sequence_count:ST.conservation.aln.seqs.length,alignment_identity:ST.conservation.M.identity}:null,sampling:ST.sampling?{method:ST.sampling.method,settings:ST.sampling.cfg}:null,interpretation:hypothesis,limitations:['Not experimental validation','Sampling is not production MD','Empirical scores are not binding free energies','Missing analyses are not inferred']};
-      // Optional authenticated-by-launch-token return to a separately opened KG tab.
-      // No KG dependency: standalone Workbench runs and local JSON export remain unchanged.
+      // Display a readable report by default; JSON is an optional explicit export.
+      let delivered=false;
       const returnOrigin=q.get('return_origin'),returnToken=q.get('return_token');
       if(returnOrigin==='https://aribis77.github.io'&&/^[0-9a-f]{48}$/.test(returnToken||'')&&window.opener){
         try{
           window.opener.postMessage({type:'vwf-workbench-result/1',token:returnToken,report:result},returnOrigin);
-          log('Combined report sent to the originating KG tab (if still open).','ok');
-        }catch(e){log('KG return unavailable; local JSON export remains available: '+e.message,'warn');}
+          delivered=true;
+          log('Report sent to the originating KG tab. Open the KG variant report to view it.','ok');
+        }catch(e){log('KG return unavailable: '+e.message,'warn');}
       }
-      const blob=new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),href=URL.createObjectURL(blob),a=document.createElement('a');a.href=href;a.download=pdb+'_'+mutation+'_mechanistic_report.json';a.click();setTimeout(()=>URL.revokeObjectURL(href),2000);
-      log('Combined evidence-status report exported. Numerical mechanistic claims require expert review.','ok');
+      let panel=document.getElementById('automatic-mechanistic-report');
+      if(!panel){panel=document.createElement('section');panel.id='automatic-mechanistic-report';panel.style.cssText='max-width:1050px;margin:20px auto;padding:22px;border:1px solid #94a3b8;border-radius:12px;background:#fff;color:#172033;position:relative;z-index:5';document.body.appendChild(panel);}
+      panel.replaceChildren();
+      const h=document.createElement('h2');h.textContent='Structural analysis report · '+pdb+' · '+mutation;panel.appendChild(h);
+      const note=document.createElement('p');note.textContent=delivered?'Results sent to the originating KG tab. This local summary remains available here.':'Results are shown here. No JSON download is required.';panel.appendChild(note);
+      const metrics=result.metrics||{};
+      const entries=[
+        ['Mutation and structure',mutation+' in '+pdb+' · chain '+site.chain],
+        ['Contact changes',metrics.contacts?'Lost '+metrics.contacts.lost+', gained '+metrics.contacts.gained+', retained '+metrics.contacts.kept:'Not available'],
+        ['Residue conservation',metrics.conservation?.fraction==null?'Not available':String(metrics.conservation.fraction)+' (fraction; '+metrics.conservation.sequence_count+' sequences)'],
+        ['Empirical energetics',metrics.energetics?'Calculated; empirical scoring, not binding free energy':'Not available'],
+        ['Conformational sampling',metrics.sampling?'Exploratory '+(metrics.sampling.method||metrics.sampling.kind||'sampling'):'Not available']
+      ];
+      const table=document.createElement('table');table.style.cssText='width:100%;border-collapse:collapse';
+      for(const [label,value] of entries){const tr=document.createElement('tr'),th=document.createElement('th'),td=document.createElement('td');th.textContent=label;td.textContent=value;th.style.cssText='text-align:left;padding:10px;border-bottom:1px solid #ddd';td.style.cssText='padding:10px;border-bottom:1px solid #ddd';tr.append(th,td);table.appendChild(tr);}panel.appendChild(table);
+      const caveat=document.createElement('p');caveat.textContent='Research-only exploratory analysis. No calibrated functional-impact or clinical pathogenicity score. Verify structure identity and residue mapping.';panel.appendChild(caveat);
+      const button=document.createElement('button');button.type='button';button.textContent='Download report JSON (optional)';button.onclick=()=>{const blob=new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),href=URL.createObjectURL(blob),a=document.createElement('a');a.href=href;a.download=pdb+'_'+mutation+'_mechanistic_report.json';a.click();setTimeout(()=>URL.revokeObjectURL(href),2000);};panel.appendChild(button);
+      panel.scrollIntoView({behavior:'smooth',block:'start'});
+      log('Combined structural report displayed on page. JSON export is optional.','ok');
     }
     log('Automated structural handoff completed. Review the model, contact differences and any empirical energy scores before interpretation.','ok');
   }catch(err){log('Automatic analysis could not finish: '+err.message,'err');}
