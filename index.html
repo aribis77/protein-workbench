@@ -13014,6 +13014,17 @@ setPane("p-method",`
       const result={schema:'protein-workbench-mechanistic-report/0.1',metrics:measured,created:new Date().toISOString(),pdb,mutation,chain:site.chain,analysis_status:status,conservation:ST.conservation?{sequence_count:ST.conservation.aln.seqs.length,alignment_identity:ST.conservation.M.identity}:null,sampling:ST.sampling?{method:ST.sampling.method,settings:ST.sampling.cfg}:null,interpretation:hypothesis,limitations:['Not experimental validation','Sampling is not production MD','Empirical scores are not binding free energies','Missing analyses are not inferred']};
       // Display a readable report by default; JSON is an optional explicit export.
       let delivered=false;
+      // BroadcastChannel works across the two GitHub Pages paths even if the
+      // browser severs window.opener for cross-tab isolation.
+      const channelAvailable=typeof BroadcastChannel!=='undefined';
+      if(channelAvailable&&q.get('return_origin')==='https://aribis77.github.io'&&/^[0-9a-f]{48}$/.test(q.get('return_token')||'')){
+        try{
+          const ch=new BroadcastChannel('vwf-workbench-results-v1');
+          ch.postMessage({type:'vwf-workbench-result/1',token:q.get('return_token'),report:result});
+          ch.close();delivered=true;
+        }catch(e){log('BroadcastChannel return failed: '+e.message,'warn');}
+      }
+
       const returnOrigin=q.get('return_origin'),returnToken=q.get('return_token');
       if(returnOrigin==='https://aribis77.github.io'&&/^[0-9a-f]{48}$/.test(returnToken||'')&&window.opener){
         try{
