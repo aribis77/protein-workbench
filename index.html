@@ -12924,7 +12924,20 @@ setPane("p-method",`
   if(aa.length!==1){log('Mutation '+mutation+' could not be uniquely mapped to the loaded PDB residue numbering. Select the correct chain/residue manually; no mutation was performed.','warn');return;}
   const site=aa[0];$('#mchain').value=site.chain;fillResidues();$('#mres').value=site.key;$('#mres').onchange();
   $('#mto').value=Object.keys(AA1).find(k=>AA1[k]===match[3])||'';
-  log('Prepared '+mutation+' on chain '+site.chain+' in '+pdb+'. Review the residue mapping, then choose Build and relax mutant.','ok');
+  log('Validated '+mutation+' on chain '+site.chain+' in '+pdb+'.','ok');
+  const analysis=q.get('analysis')||'interface_contacts';
+  if(!['interface_contacts','relative_binding_energy','conformational_sampling','conservation','combined'].includes(analysis))return;
+  if(analysis==='conservation'){log('Sequence conservation requires a homologous alignment; no conservation calculation was launched.','warn');return;}
+  try{
+    await $('#btnanalyse').onclick();
+    await runMutation();
+    if(analysis==='relative_binding_energy'||analysis==='combined'){
+      if(!$('#btnenergy').disabled)await $('#btnenergy').onclick();
+    }
+    if(analysis==='conformational_sampling'||analysis==='combined')log('Conformational sampling is not launched by this integration; configure the appropriate sampling protocol in Workbench.','warn');
+    log('Automated structural handoff completed. Review the model, contact differences and any empirical energy scores before interpretation.','ok');
+  }catch(err){log('Automatic analysis could not finish: '+err.message,'err');}
+
 })();
 </script>
 </body>
