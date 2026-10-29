@@ -12927,14 +12927,43 @@ setPane("p-method",`
   log('Validated '+mutation+' on chain '+site.chain+' in '+pdb+'.','ok');
   const analysis=q.get('analysis')||'interface_contacts';
   if(!['interface_contacts','relative_binding_energy','conformational_sampling','conservation','combined'].includes(analysis))return;
-  if(analysis==='conservation'){log('Sequence conservation requires a homologous alignment; no conservation calculation was launched.','warn');return;}
+  if(analysis==='conservation'&&!q.get('alignment_url')){log('Sequence conservation requires an HTTPS alignment URL; no conservation calculation was launched.','warn');return;}
   try{
-    await $('#btnanalyse').onclick();
-    await runMutation();
+    if(analysis!=='conservation'){await $('#btnanalyse').onclick();await runMutation();}
     if(analysis==='relative_binding_energy'||analysis==='combined'){
       if(!$('#btnenergy').disabled)await $('#btnenergy').onclick();
     }
-    if(analysis==='conformational_sampling'||analysis==='combined')log('Conformational sampling is not launched by this integration; configure the appropriate sampling protocol in Workbench.','warn');
+    if(analysis==='conformational_sampling'||analysis==='combined'){
+      $('#femethod').value='ensemble';
+      $('#feeffort').value='quick';
+      await runSampled();
+      log('Ensemble conformational sampling completed using the quick preset. This is exploratory, not validated molecular dynamics.','warn');
+    }
+    if(analysis==='combined'||analysis==='conservation'){
+      const alignment=q.get('alignment_url');
+      if(alignment){
+        try{
+          const u=new URL(alignment);
+          if(u.protocol!=='https:')throw Error('HTTPS alignment URL required');
+          const response=await fetch(u.href);
+          if(!response.ok)throw Error('HTTP '+response.status);
+          const alignmentText=await response.text();
+          if(alignmentText.length>2000000)throw Error('Alignment exceeds 2 MB');
+          $('#alnbox').value=alignmentText;
+          $('#alnchain').innerHTML='';
+          ST.wt.chains.forEach(c=>{const opt=document.createElement('option');opt.value=c;opt.textContent='Chain '+c;$('#alnchain').appendChild(opt);});
+          $('#alnchain').value=site.chain;
+          await conservationRun();
+        }catch(e){log('Conservation not evaluated: '+e.message,'warn');}
+      }else log('Conservation not evaluated: a homologous multiple-sequence alignment URL was not provided.','warn');
+    }
+    if(analysis==='combined'){
+      const status={contacts:!!ST.contactsWT,mutant:!!ST.mut,energetics:!!ST.energies,sampling:!!ST.sampling,conservation:!!ST.conservation};
+      const hypothesis='Structural contact and conformational predictions are hypotheses; review residue-local changes, alignment coverage, model provenance and experimental KG evidence before drawing a mechanism.';
+      const result={schema:'protein-workbench-mechanistic-report/0.1',created:new Date().toISOString(),pdb,mutation,chain:site.chain,analysis_status:status,conservation:ST.conservation?{sequence_count:ST.conservation.aln.seqs.length,alignment_identity:ST.conservation.M.identity}:null,sampling:ST.sampling?{method:ST.sampling.method,settings:ST.sampling.cfg}:null,interpretation:hypothesis,limitations:['Not experimental validation','Sampling is not production MD','Empirical scores are not binding free energies','Missing analyses are not inferred']};
+      const blob=new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),href=URL.createObjectURL(blob),a=document.createElement('a');a.href=href;a.download=pdb+'_'+mutation+'_mechanistic_report.json';a.click();setTimeout(()=>URL.revokeObjectURL(href),2000);
+      log('Combined evidence-status report exported. Numerical mechanistic claims require expert review.','ok');
+    }
     log('Automated structural handoff completed. Review the model, contact differences and any empirical energy scores before interpretation.','ok');
   }catch(err){log('Automatic analysis could not finish: '+err.message,'err');}
 
