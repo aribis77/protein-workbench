@@ -12997,9 +12997,9 @@ setPane("p-method",`
     if(!regions.length)mappingProblem='PDB '+pdb+' does not map to canonical VWF residue '+residue+'.';
     else if(options.length!==1)mappingProblem='SIFTS maps the position, but a unique matching histidine was not found in loaded atomic coordinates.';
   }catch(e){mappingProblem=e.message;}
-  // Sequence-based fallback: author/label numbering and missing residues can
-  // invalidate a simple SIFTS start+offset calculation. Match a unique local
-  // UniProt sequence window to the loaded chain's observed residues instead.
+  // Align the canonical reference against each resolved PDB chain. Unlike a
+  // literal sequence-window search, this tolerates unresolved loops and gaps.
+  // Both sides of the target histidine must independently support the mapping.
   if(options.length!==1){
     try{
       const u=await fetch('https://rest.uniprot.org/uniprotkb/P04275.fasta');
@@ -13007,29 +13007,43 @@ setPane("p-method",`
       const fasta=await u.text(),seq=fasta.split(/\r?\n/).slice(1).join('').trim().toUpperCase();
       if(seq[residue-1]!==match[1])throw Error('Reference amino acid mismatch at UniProt position '+residue);
       const chainIDs=[...new Set(ST.wt.residues.filter(r=>r.std&&AA1[r.resn]).map(r=>r.chain))].filter(c=>!chain||c===chain);
-      const matches=[];
+      const scored=[];
+      // Global alignment of short flanks, with moderate gap penalties.
+      function flankScore(ref,obs){
+        const n=ref.length,m=obs.length,dp=Array.from({length:n+1},()=>new Float64Array(m+1));
+        for(let i=1;i<=n;i++)dp[i][0]=-2*i;
+        for(let j=1;j<=m;j++)dp[0][j]=-2*j;
+        for(let i=1;i<=n;i++)for(let j=1;j<=m;j++)
+          dp[i][j]=Math.max(dp[i-1][j-1]+(ref[i-1]===obs[j-1]?2:-2),dp[i-1][j]-2,dp[i][j-1]-2);
+        return dp[n][m];
+      }
+      const radius=18;
+      const left=seq.slice(Math.max(0,residue-1-radius),residue-1);
+      const right=seq.slice(residue,Math.min(seq.length,residue+radius));
       for(const c of chainIDs){
         const residues=ST.wt.residues.filter(r=>r.std&&r.chain===c&&AA1[r.resn]);
         const chainSeq=residues.map(r=>AA1[r.resn]).join('');
-        for(const radius of [12,9,6]){
-          const lo=Math.max(0,residue-1-radius),hi=Math.min(seq.length,residue+radius);
-          const motif=seq.slice(lo,hi),center=residue-1-lo;
-          if(motif.length<9)continue;
-          let at=chainSeq.indexOf(motif);
-          while(at!==-1){
-            const site=residues[at+center];
-            if(site&&AA1[site.resn]===match[1])matches.push({site,chain:c,radius});
-            at=chainSeq.indexOf(motif,at+1);
-          }
-          if(matches.some(x=>x.chain===c))break;
+        for(let i=0;i<residues.length;i++){
+          if(chainSeq[i]!==match[1])continue;
+          const obsLeft=chainSeq.slice(Math.max(0,i-radius-4),i);
+          const obsRight=chainSeq.slice(i+1,i+radius+5);
+          if(obsLeft.length<10||obsRight.length<10)continue;
+          let l=-Infinity,rr=-Infinity;
+          for(let n=12;n<=Math.min(obsLeft.length,radius+4);n++)l=Math.max(l,flankScore(left,obsLeft.slice(-n)));
+          for(let n=12;n<=Math.min(obsRight.length,radius+4);n++)rr=Math.max(rr,flankScore(right,obsRight.slice(0,n)));
+          const score=l+rr;
+          if(l>=18&&rr>=18)scored.push({site:residues[i],score,chain:c,left:l,right:rr});
         }
       }
-      const unique=[...new Map(matches.map(x=>[x.site.key,x.site])).values()];
-      if(unique.length){
-        options=unique;
-        mappingProblem='Verified by unique UniProt sequence-window alignment in loaded coordinates; numbering offsets were not assumed.';
-      }else mappingProblem+=' Sequence-window alignment found no matching resolved residue.';
-    }catch(e){mappingProblem+=' Sequence fallback: '+e.message;}
+      scored.sort((a,b)=>b.score-a.score);
+      const best=scored[0],runner=scored.find(x=>x.chain===best?.chain&&x.site.key!==best.site.key);
+      if(best&&(!runner||best.score-runner.score>=8)){
+        // Equivalent chains are handled separately below.
+        options=scored.filter(x=>x.score>=best.score-4&&(!scored.some(y=>y.chain===x.chain&&y.score>x.score))).map(x=>x.site);
+        mappingProblem='Canonical UniProt flanks aligned with gaps; residue identity confirmed in the loaded coordinates.';
+        log('UniProt sequence alignment resolved '+mutation+' at '+options.map(x=>x.chain+':'+x.resi).join(', ')+' (score '+best.score+').','ok');
+      }else mappingProblem+=' No unique high-confidence sequence alignment across both flanks.';
+    }catch(e){mappingProblem+=' Sequence alignment fallback: '+e.message;}
   }
   // Equivalent copies of a homomer may map to the same UniProt site.
   // Use a deterministic chain only when each candidate is sequence-verified.
